@@ -1,0 +1,92 @@
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By 
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from bs4 import BeautifulSoup
+from urllib.parse import quote, urljoin
+import time
+import re
+
+def parse_newpackspb(query):
+    encoded_query = quote(query)
+    url = f"https://newpackspb.ru/?s={encoded_query}&post_type=product"
+    print("[NEWPACKSPB DEBUG] Request URL:", url)
+    
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    
+    driver = webdriver.Chrome(options=options)
+    driver.get(url)
+    
+    try:
+        WebDriverWait(driver, 15).until(
+            EC.presence_of_all_elements_located((By.CSS_SELECTOR, "a.woocommerce-LoopProduct-link"))
+        )
+    except Exception as e:
+        print("[NEWPACKSPB DEBUG] Timeout waiting for products:", e)
+    
+    time.sleep(1)
+    page_source = driver.page_source
+    driver.quit()
+    
+    soup = BeautifulSoup(page_source, "html.parser")
+    product_elems = soup.find_all("a", class_="woocommerce-LoopProduct-link")
+    
+    products = []
+    for elem in product_elems:
+        try:
+            name = elem.get_text(strip=True) if elem.get_text(strip=True) else "Без названия"
+            link = elem.get("href") or url
+    
+            price_div = elem.find_next("div", class_=lambda c: c and "price-wrapper" in c)
+            if price_div:
+                price_span = price_div.find("span", class_=lambda c: c and "woocommerce-Price-amount" in c)
+                if price_span:
+                    bdi = price_span.find("bdi")
+                    if bdi:
+                        price_text = bdi.get_text(strip=True)
+                        numbers = re.findall(r'\d+[,.]\d+', price_text)
+                        if numbers:
+                            price_numeric = float(numbers[0].replace(',', '.'))
+                        else:
+                            match = re.search(r'\d+', price_text)
+                            price_numeric = float(match.group()) if match else 0.0
+                        price_display = price_text
+                    else:
+                        price_numeric = 0.0
+                        price_display = ""
+                else:
+                    price_numeric = 0.0
+                    price_display = ""
+            else:
+                price_numeric = 0.0
+                price_display = ""
+    
+            img_tag = elem.find_previous("img")
+            img_url = ""
+            if img_tag:
+                img_url = img_tag.get("data-src") or img_tag.get("src") or ""
+                if img_url.startswith("/"):
+                    img_url = urljoin("https://newpackspb.ru/", img_url)
+    
+            availability = "В наличии"
+            quantity = 1
+            
+            products.append({
+                "name": name,
+                "price": price_numeric,
+                "price_display": price_display,
+                "site": "NewPacksPB",
+                "link": link,
+                "img_url": img_url,
+                "quantity": quantity,
+                "availability": availability
+            })
+        except Exception as e:
+            print("Ошибка при парсинге товара NewPacksPB:", e)
+    
+    return products

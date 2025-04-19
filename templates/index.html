@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Сравнение товаров</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  </head>
+  <body>
+    <header>
+      <h1>Сравнение товаров</h1>
+      <form id="search-form">
+        <input type="text" id="search-input" placeholder="Введите поисковый запрос" />
+        <button type="submit">Найти</button>
+      </form>
+    </header>
+    
+    <!-- Фильтры -->
+    <section id="filters">
+      <label for="min-price">Цена от:</label>
+      <input type="number" id="min-price" placeholder="0" />
+      <label for="max-price">до:</label>
+      <input type="number" id="max-price" placeholder="∞" />
+      <label for="sort">Сортировать:</label>
+      <select id="sort">
+        <option value="default">По умолчанию</option>
+        <option value="priceAsc">Цена: по возрастанию</option>
+        <option value="priceDesc">Цена: по убыванию</option>
+      </select>
+      <button id="apply-filters">Применить</button>
+    </section>
+    
+    <!-- Контейнер результатов. Здесь для каждого магазина (ключ) будут созданы блоки с заголовком и рядом карточек -->
+    <section id="results">
+      <!-- Скриптом будут добавлены блоки .store-heading и .store-row -->
+    </section>
+    
+    <!-- Боковая колонка для корзины -->
+    <aside id="cart-container">
+      <h2>Корзина</h2>
+      <div id="cart">
+        <!-- Здесь отображается содержимое корзины -->
+      </div>
+      <button id="checkout-btn">Оформить заказ</button>
+    </aside>
+    
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  </body>
+</html>
