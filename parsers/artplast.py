@@ -1,92 +1,89 @@
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
+# artplast_parser.py
+
+import logging
+import time
+import re
+from urllib.parse import quote, urljoin
+from bs4 import BeautifulSoup
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from bs4 import BeautifulSoup
-from urllib.parse import quote, urljoin
-import time
-import re
 
-def parse_artplast(query):
+from driver_utils import get_driver
+from common_regex import DECIMAL_REGEX, INTEGER_REGEX, PACK_REGEX_ARTPLAST
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def parse_artplast(query: str):
     encoded_query = quote(query)
     url = f"https://spb.artplast.ru/search/?q={encoded_query}"
-    print("[ARTPLAST DEBUG] Request URL:", url)
-
-    options = Options()
-    options.add_argument("--headless")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
+    logger.info("[ARTPLAST DEBUG] Request URL: %s", url)
     
-    driver = webdriver.Chrome(options=options)
-    driver.get(url)
-    
+    driver = get_driver()
     try:
+        driver.get(url)
+        # Ожидаем появления ссылок на товары
         WebDriverWait(driver, 15).until(
             EC.presence_of_all_elements_located((By.CSS_SELECTOR, "a[href^='/tovar/']"))
         )
+        # Короткая задержка для динамичного контента
+        time.sleep(0.3)
+        page_source = driver.page_source
     except Exception as e:
-        print("[ARTPLAST DEBUG] Timeout waiting for products:", e)
-    
-    time.sleep(0.5)
-    page_source = driver.page_source
-    driver.quit()
+        logger.error("[ARTPLAST DEBUG] Ошибка при загрузке страницы: %s", e)
+        page_source = ""
+    finally:
+        driver.quit()
     
     soup = BeautifulSoup(page_source, "html.parser")
     product_elems = soup.find_all("a", href=lambda href: href and href.startswith("/tovar/"))
-    
     products = []
-    seen = set()  # множество для хранения уникальных ссылок
+    seen = set()  # для исключения дублирования
+    
     for elem in product_elems:
         try:
             link = urljoin("https://spb.artplast.ru/", elem.get("href"))
-            # Если товар с таким URL уже добавлен, пропускаем его
             if link in seen:
                 continue
             seen.add(link)
             
             name_elem = elem.find_next("a", class_=lambda c: c and "hover:text-violet" in c)
             name = name_elem.get_text(strip=True) if name_elem else "Без названия"
-
-            # Фильтруем товары: если название не содержит поисковый запрос, пропускаем товар
+            # Фильтрация по наименованию
             if query.lower() not in name.lower():
                 continue
-
+                
+            # Извлечение цены
+            price_numeric = 0.0
+            price_display = ""
             price_div = elem.find_next("div", class_=lambda c: c and "min-w-" in c)
             if price_div:
                 price_span = price_div.find("span", class_=lambda c: c and "tracking-wider" in c)
                 if price_span:
                     price_text = price_span.get_text(strip=True)
-                    numbers = re.findall(r'\d+[,.]\d+', price_text)
+                    numbers = DECIMAL_REGEX.findall(price_text)
                     if numbers:
                         price_numeric = float(numbers[0].replace(',', '.'))
                     else:
-                        match = re.search(r'\d+', price_text)
+                        match = INTEGER_REGEX.search(price_text)
                         price_numeric = float(match.group()) if match else 0.0
                     price_display = price_text
-                else:
-                    price_numeric = 0.0
-                    price_display = ""
-            else:
-                price_numeric = 0.0
-                price_display = ""
-
+                    
             avail_span = elem.find_next("span", class_=lambda c: c and ("text-green" in c or "text-orange" in c))
             availability = avail_span.get_text(strip=True) if avail_span else "Неизвестно"
     
             # Извлечение упаковки (минимальной партии)
-            # Перебираем все следующие элементы с классом "truncate" и ищем шаблон "х <число> шт"
             step = 1
             pack_spans = elem.find_all_next("span", class_="truncate")
             for span in pack_spans:
                 alt_text = span.get_text(strip=True)
-                m_alt = re.search(r'х\s*(\d+)\s*шт', alt_text, re.IGNORECASE)
+                m_alt = PACK_REGEX_ARTPLAST.search(alt_text)
                 if m_alt:
                     step = int(m_alt.group(1))
                     break
-            quantity = step  # начальное количество равно упаковочной партии
-
+            quantity = step  # количество равно упаковке
+    
             img_tag = elem.find_next("img")
             img_url = ""
             if img_tag:
@@ -106,5 +103,5 @@ def parse_artplast(query):
                 "availability": availability
             })
         except Exception as e:
-            print("Ошибка при парсинге товара ArtPlast:", e)
+            logger.error("Ошибка при парсинге товара ArtPlast: %s", e)
     return products

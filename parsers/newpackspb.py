@@ -1,47 +1,49 @@
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
+# newpackspb_parser.py
+
+import logging
+import time
+import re
+from urllib.parse import urljoin, quote
+from bs4 import BeautifulSoup
 from selenium.webdriver.common.by import By 
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from bs4 import BeautifulSoup
-from urllib.parse import quote, urljoin
-import time
-import re
 
-def parse_newpackspb(query):
+from driver_utils import get_driver
+from common_regex import DECIMAL_REGEX, INTEGER_REGEX
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def parse_newpackspb(query: str):
     encoded_query = quote(query)
     url = f"https://newpackspb.ru/?s={encoded_query}&post_type=product"
-    print("[NEWPACKSPB DEBUG] Request URL:", url)
+    logger.info("[NEWPACKSPB DEBUG] Request URL: %s", url)
     
-    options = Options()
-    options.add_argument("--headless")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    
-    driver = webdriver.Chrome(options=options)
-    driver.get(url)
-    
+    driver = get_driver()
     try:
+        driver.get(url)
         WebDriverWait(driver, 15).until(
             EC.presence_of_all_elements_located((By.CSS_SELECTOR, "a.woocommerce-LoopProduct-link"))
         )
+        time.sleep(0.3)
+        page_source = driver.page_source
     except Exception as e:
-        print("[NEWPACKSPB DEBUG] Timeout waiting for products:", e)
-    
-    time.sleep(0.5)
-    page_source = driver.page_source
-    driver.quit()
+        logger.error("[NEWPACKSPB DEBUG] Ошибка при загрузке страницы: %s", e)
+        page_source = ""
+    finally:
+        driver.quit()
     
     soup = BeautifulSoup(page_source, "html.parser")
     product_elems = soup.find_all("a", class_="woocommerce-LoopProduct-link")
-    
     products = []
+    
     for elem in product_elems:
         try:
             name = elem.get_text(strip=True) if elem.get_text(strip=True) else "Без названия"
             link = elem.get("href") or url
-    
+            price_numeric = 0.0
+            price_display = ""
             price_div = elem.find_next("div", class_=lambda c: c and "price-wrapper" in c)
             if price_div:
                 price_span = price_div.find("span", class_=lambda c: c and "woocommerce-Price-amount" in c)
@@ -49,11 +51,11 @@ def parse_newpackspb(query):
                     bdi = price_span.find("bdi")
                     if bdi:
                         price_text = bdi.get_text(strip=True)
-                        numbers = re.findall(r'\d+[,.]\d+', price_text)
+                        numbers = DECIMAL_REGEX.findall(price_text)
                         if numbers:
                             price_numeric = float(numbers[0].replace(',', '.'))
                         else:
-                            match = re.search(r'\d+', price_text)
+                            match = INTEGER_REGEX.search(price_text)
                             price_numeric = float(match.group()) if match else 0.0
                         price_display = price_text
                     else:
@@ -73,8 +75,7 @@ def parse_newpackspb(query):
                 if img_url.startswith("/"):
                     img_url = urljoin("https://newpackspb.ru/", img_url)
     
-            # Здесь упаковочная информация не извлекается – по умолчанию количество = 1
-            quantity = 1
+            quantity = 1  # По умолчанию упаковка = 1 шт.
     
             products.append({
                 "name": name,
@@ -87,6 +88,6 @@ def parse_newpackspb(query):
                 "availability": "В наличии"
             })
         except Exception as e:
-            print("Ошибка при парсинге товара NewPacksPB:", e)
+            logger.error("Ошибка при парсинге товара NewPacksPB: %s", e)
     
     return products

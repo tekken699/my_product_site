@@ -1,0 +1,572 @@
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from bs4 import BeautifulSoup
+from urllib.parse import quote, urljoin
+import time
+import re
+
+def parse_artplast(query):
+    encoded_query = quote(query)
+    url = f"https://spb.artplast.ru/search/?q={encoded_query}"
+    print("[ARTPLAST DEBUG] Request URL:", url)
+
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    
+    driver = webdriver.Chrome(options=options)
+    driver.get(url)
+    
+    try:
+        WebDriverWait(driver, 15).until(
+            EC.presence_of_all_elements_located((By.CSS_SELECTOR, "a[href^='/tovar/']"))
+        )
+    except Exception as e:
+        print("[ARTPLAST DEBUG] Timeout waiting for products:", e)
+    
+    time.sleep(0.5)
+    page_source = driver.page_source
+    driver.quit()
+    
+    soup = BeautifulSoup(page_source, "html.parser")
+    product_elems = soup.find_all("a", href=lambda href: href and href.startswith("/tovar/"))
+    
+    products = []
+    seen = set()  # множество для хранения уникальных ссылок
+    for elem in product_elems:
+        try:
+            link = urljoin("https://spb.artplast.ru/", elem.get("href"))
+            # Если товар с таким URL уже добавлен, пропускаем его
+            if link in seen:
+                continue
+            seen.add(link)
+            
+            name_elem = elem.find_next("a", class_=lambda c: c and "hover:text-violet" in c)
+            name = name_elem.get_text(strip=True) if name_elem else "Без названия"
+
+            # Фильтруем товары: если название не содержит поисковый запрос, пропускаем товар
+            if query.lower() not in name.lower():
+                continue
+
+            price_div = elem.find_next("div", class_=lambda c: c and "min-w-" in c)
+            if price_div:
+                price_span = price_div.find("span", class_=lambda c: c and "tracking-wider" in c)
+                if price_span:
+                    price_text = price_span.get_text(strip=True)
+                    numbers = re.findall(r'\d+[,.]\d+', price_text)
+                    if numbers:
+                        price_numeric = float(numbers[0].replace(',', '.'))
+                    else:
+                        match = re.search(r'\d+', price_text)
+                        price_numeric = float(match.group()) if match else 0.0
+                    price_display = price_text
+                else:
+                    price_numeric = 0.0
+                    price_display = ""
+            else:
+                price_numeric = 0.0
+                price_display = ""
+
+            avail_span = elem.find_next("span", class_=lambda c: c and ("text-green" in c or "text-orange" in c))
+            availability = avail_span.get_text(strip=True) if avail_span else "Неизвестно"
+    
+            # Извлечение упаковки (минимальной партии)
+            # Перебираем все следующие элементы с классом "truncate" и ищем шаблон "х <число> шт"
+            step = 1
+            pack_spans = elem.find_all_next("span", class_="truncate")
+            for span in pack_spans:
+                alt_text = span.get_text(strip=True)
+                m_alt = re.search(r'х\s*(\d+)\s*шт', alt_text, re.IGNORECASE)
+                if m_alt:
+                    step = int(m_alt.group(1))
+                    break
+            quantity = step  # начальное количество равно упаковочной партии
+
+            img_tag = elem.find_next("img")
+            img_url = ""
+            if img_tag:
+                img_url = img_tag.get("data-src") or img_tag.get("src") or ""
+                if img_url.startswith("/"):
+                    img_url = urljoin("https://spb.artplast.ru/", img_url)
+    
+            products.append({
+                "name": name,
+                "price": price_numeric,
+                "price_display": price_display,
+                "site": "ArtPlast",
+                "link": link,
+                "img_url": img_url,
+                "quantity": quantity,  
+                "step": step,
+                "availability": availability
+            })
+        except Exception as e:
+            print("Ошибка при парсинге товара ArtPlast:", e)
+    return products
+
+
+
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By 
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from bs4 import BeautifulSoup
+from urllib.parse import quote, urljoin
+import time
+import re
+
+def parse_gudvin(query):
+    encoded_query = quote(query)
+    url = f"https://gudvin-group.ru/?search={encoded_query}&s=1"
+    
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    
+    driver = webdriver.Chrome(options=options)
+    driver.get(url)
+    
+    try:
+        WebDriverWait(driver, 15).until(
+            EC.presence_of_all_elements_located((By.CSS_SELECTOR, ".product-card, .product-item, .product-snippet"))
+        )
+    except Exception as e:
+        print("[GUDVIN DEBUG] Timeout waiting for elements:", e)
+    
+    time.sleep(0.5)
+    page_source = driver.page_source
+    driver.quit()
+    
+    soup = BeautifulSoup(page_source, "html.parser")
+    
+    product_elems = soup.find_all("div", class_="product-card")
+    if not product_elems:
+        product_elems = soup.select("div.product-item, div.product-snippet")
+        print(f"[GUDVIN DEBUG] Использую альтернативный селектор, найдено {len(product_elems)} элементов")
+    
+    products = []
+    for elem in product_elems:
+        try:
+            title_elem = elem.find("a", class_="product-title")
+            title = title_elem.get_text(strip=True) if title_elem else ""
+            if not title:
+                img_elem = elem.find("img", alt=True)
+                title = img_elem["alt"].strip() if img_elem and img_elem.has_attr("alt") else "Без названия"
+    
+            # Извлечение упаковочных данных: ищем шаблон "уп: 50 шт"
+            quantity_elem = elem.find("span", class_="product-snippet-data-quantity")
+            step = 1
+            if quantity_elem:
+                text_quantity = quantity_elem.get_text(" ", strip=True)
+                m = re.search(r'уп[:\s]*(\d+)\s*шт', text_quantity, re.IGNORECASE)
+                if m:
+                    step = int(m.group(1))
+            quantity = step  # по умолчанию количество равно упаковке
+    
+            # Извлечение цены
+            price_elem = elem.find("span", class_="price-value")
+            if not price_elem:
+                price_elem = elem.find("div", class_="product-price")
+            if not price_elem:
+                price_container = elem.find("div", class_="product-snippet-price")
+                if price_container:
+                    meta_price = price_container.find("meta", itemprop="price")
+                    if meta_price and meta_price.has_attr("content"):
+                        price_value = float(meta_price["content"])
+                    else:
+                        span_price = price_container.find("span")
+                        if span_price:
+                            price_text = span_price.get_text(strip=True)
+                            numbers = re.findall(r'\d+\.\d+', price_text)
+                            price_value = float(numbers[0]) if numbers else 0.0
+                        else:
+                            price_value = 0.0
+                else:
+                    price_value = 0.0
+            else:
+                price_text = price_elem.get_text(strip=True)
+                numbers = re.findall(r'\d+\.\d+', price_text)
+                price_value = float(numbers[0]) if numbers else 0.0
+    
+            link_elem = elem.find("a", href=True)
+            if not link_elem:
+                continue
+            link = urljoin("https://gudvin-group.ru/", link_elem["href"])
+    
+            img_url = None
+            img_container = elem.find("div", class_="product-snippet-img")
+            if img_container:
+                img_tag = img_container.find("img")
+                if img_tag and img_tag.has_attr("src"):
+                    img_url = urljoin("https://gudvin-group.ru/", img_tag["src"])
+            else:
+                img_tag = elem.find("img")
+                if img_tag and img_tag.has_attr("src"):
+                    img_url = img_tag["src"]
+    
+            availability = "Неизвестно"
+            avail_link = elem.find("link", itemprop="availability")
+            if avail_link and avail_link.has_attr("href"):
+                href_val = avail_link["href"].strip()
+                if href_val == "http://schema.org/InStock":
+                    availability = "В наличии"
+                elif href_val == "http://schema.org/OutOfStock":
+                    availability = "Нет в наличии"
+                elif href_val == "http://schema.org/PreOrder":
+                    availability = "Под заказ"
+                else:
+                    availability = href_val
+            else:
+                status_elem = elem.find("span", class_="product-snippet-data-status")
+                if status_elem:
+                    text_status = status_elem.get_text(strip=True).lower()
+                    if "в наличии" in text_status:
+                        availability = "В наличии"
+                    elif "под заказ" in text_status:
+                        availability = "Под заказ"
+                    else:
+                        availability = text_status.capitalize()
+    
+            products.append({
+                "name": title,
+                "price": price_value,
+                "site": "Gudvin Group",
+                "link": link,
+                "img_url": img_url,
+                "quantity": quantity,  # количество = упаковка
+                "step": step,          # упаковка, например 50 шт
+                "availability": availability
+            })
+        except Exception as e:
+            print("Ошибка при парсинге товара Gudvin:", e)
+    
+    return products
+
+
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from bs4 import BeautifulSoup
+from urllib.parse import quote, urljoin
+import time
+import re
+
+def parse_hozka(query):
+    normalized_query = " ".join(query.split())
+    encoded_query = quote(normalized_query)
+    url = f"https://hozka.pro/search?search={encoded_query}"
+    print("[HOZKA DEBUG] Request URL:", url)
+    
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    
+    driver = webdriver.Chrome(options=options)
+    driver.get(url)
+    
+    try:
+        WebDriverWait(driver, 15).until(
+            EC.presence_of_all_elements_located((By.CSS_SELECTOR, "a[href^='/catalog/']"))
+        )
+    except Exception as e:
+        print("[HOZKA DEBUG] Timeout waiting for catalog links:", e)
+    
+    time.sleep(0.5)
+    page_source = driver.page_source
+    driver.quit()
+    
+    soup = BeautifulSoup(page_source, "html.parser")
+    product_elems = soup.find_all("a", href=lambda href: href and href.startswith("/catalog/"))
+    
+    products = []
+    for elem in product_elems:
+        try:
+            # Проверяем ссылку на корректность
+            raw_href = elem.get("href", "")
+            if not raw_href.startswith("/catalog/") or "search" in raw_href:
+                # Пропускаем некорректные ссылки или те, что ведут на поиск
+                continue
+            
+            # Извлекаем полную ссылку
+            link = urljoin("https://hozka.pro/", raw_href)
+            
+            # Извлекаем название товара
+            title_elem = elem.find("div", class_=lambda c: c and "line-clamp-2" in c)
+            name = title_elem.get_text(strip=True) if title_elem else ""
+            if not name:
+                # Пропускаем карточки без названия
+                continue
+            
+            # Извлечение цены за упаковку
+            price_elem = elem.find("div", class_=lambda c: c and "font-bold" in c)
+            total_price = 0.0
+            if price_elem:
+                price_text = price_elem.get_text(strip=True)
+                numbers = re.findall(r'\d+[,.]\d+', price_text)
+                if numbers:
+                    total_price = float(numbers[0].replace(',', '.'))
+                else:
+                    match = re.search(r'\d+', price_text)
+                    total_price = float(match.group()) if match else 0.0
+            
+            # Извлечение количества штук в упаковке
+            step = 1
+            quantity_elem = elem.find("div", class_=lambda c: c and "mt-3" in c)
+            if quantity_elem:
+                qty_text = quantity_elem.get_text(strip=True)
+                m = re.search(r"(\d+)", qty_text)
+                if m:
+                    try:
+                        step = int(m.group(1))
+                    except:
+                        step = 1
+            
+            # Рассчёт цены за штуку
+            unit_price = total_price / step if step > 0 else total_price
+            price_display_unit = f"{unit_price:.2f} ₽/шт."
+            
+            # Извлечение URL картинки
+            img_tag = elem.find("img")
+            img_url = ""
+            if img_tag:
+                img_url = img_tag.get("src") or ""
+                if img_url.startswith("/"):
+                    img_url = urljoin("https://hozka.pro/", img_url)
+            
+            # Добавляем товар в список результатов
+            products.append({
+                "name": name,
+                "price": unit_price,  # Цена за штуку
+                "price_display": price_display_unit,  # Форматированная строка
+                "site": "Hozka.pro",
+                "link": link,
+                "img_url": img_url,
+                "quantity": step,  # Упаковочное количество
+                "step": step,
+                "availability": "В наличии"
+            })
+        except Exception as e:
+            print("Ошибка при парсинге товара Hozka:", e)
+    return products
+
+
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By 
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from bs4 import BeautifulSoup
+from urllib.parse import quote, urljoin
+import time
+import re
+
+def parse_newpackspb(query):
+    encoded_query = quote(query)
+    url = f"https://newpackspb.ru/?s={encoded_query}&post_type=product"
+    print("[NEWPACKSPB DEBUG] Request URL:", url)
+    
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    
+    driver = webdriver.Chrome(options=options)
+    driver.get(url)
+    
+    try:
+        WebDriverWait(driver, 15).until(
+            EC.presence_of_all_elements_located((By.CSS_SELECTOR, "a.woocommerce-LoopProduct-link"))
+        )
+    except Exception as e:
+        print("[NEWPACKSPB DEBUG] Timeout waiting for products:", e)
+    
+    time.sleep(0.5)
+    page_source = driver.page_source
+    driver.quit()
+    
+    soup = BeautifulSoup(page_source, "html.parser")
+    product_elems = soup.find_all("a", class_="woocommerce-LoopProduct-link")
+    
+    products = []
+    for elem in product_elems:
+        try:
+            name = elem.get_text(strip=True) if elem.get_text(strip=True) else "Без названия"
+            link = elem.get("href") or url
+    
+            price_div = elem.find_next("div", class_=lambda c: c and "price-wrapper" in c)
+            if price_div:
+                price_span = price_div.find("span", class_=lambda c: c and "woocommerce-Price-amount" in c)
+                if price_span:
+                    bdi = price_span.find("bdi")
+                    if bdi:
+                        price_text = bdi.get_text(strip=True)
+                        numbers = re.findall(r'\d+[,.]\d+', price_text)
+                        if numbers:
+                            price_numeric = float(numbers[0].replace(',', '.'))
+                        else:
+                            match = re.search(r'\d+', price_text)
+                            price_numeric = float(match.group()) if match else 0.0
+                        price_display = price_text
+                    else:
+                        price_numeric = 0.0
+                        price_display = ""
+                else:
+                    price_numeric = 0.0
+                    price_display = ""
+            else:
+                price_numeric = 0.0
+                price_display = ""
+    
+            img_tag = elem.find_previous("img")
+            img_url = ""
+            if img_tag:
+                img_url = img_tag.get("data-src") or img_tag.get("src") or ""
+                if img_url.startswith("/"):
+                    img_url = urljoin("https://newpackspb.ru/", img_url)
+    
+            # Здесь упаковочная информация не извлекается – по умолчанию количество = 1
+            quantity = 1
+    
+            products.append({
+                "name": name,
+                "price": price_numeric,
+                "price_display": price_display,
+                "site": "NewPacksPB",
+                "link": link,
+                "img_url": img_url,
+                "quantity": quantity,
+                "availability": "В наличии"
+            })
+        except Exception as e:
+            print("Ошибка при парсинге товара NewPacksPB:", e)
+    
+    return products
+
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.common.by import By 
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from bs4 import BeautifulSoup
+from urllib.parse import quote, urljoin
+import time
+import re
+
+def parse_promispb(query):
+    encoded_query = quote(query)
+    url = f"https://promispb.ru/search/?query={encoded_query}"
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    
+    driver = webdriver.Chrome(options=options)
+    driver.get(url)
+    
+    try:
+        WebDriverWait(driver, 15).until(
+            EC.presence_of_all_elements_located((By.CSS_SELECTOR, ".products__pr-price-base, .price-wrapper"))
+        )
+    except Exception as e:
+        print("[PROMINDUS DEBUG] Timeout waiting for price element:", e)
+    
+    time.sleep(0.5)
+    page_source = driver.page_source
+    driver.quit()
+    
+    soup = BeautifulSoup(page_source, "html.parser")
+    product_elems = soup.find_all("div", class_="products__item")
+    products = []
+    for elem in product_elems:
+        try:
+            # Извлекаем название товара
+            name_elem = elem.find("span", class_="products__item-info-name")
+            name = name_elem.get_text(strip=True) if name_elem else "Без названия"
+    
+            # Извлекаем состояние товара (наличие)
+            availability = "В наличии"  # Значение по умолчанию
+            availability_div = elem.find("div", class_="products__available")
+            if availability_div:
+                out_of_stock = availability_div.find("div", class_="products__available-out-of-stock")
+                if out_of_stock:
+                    availability = out_of_stock.get_text(strip=True)
+    
+            # Извлекаем цену
+            price_wrapper = elem.find("div", class_="products__pr-price-base")
+            if not price_wrapper:
+                price_wrapper = elem.find("span", class_="price-wrapper")
+            price_numeric = 0.0
+            price_display = ""
+    
+            # Проверяем, указана ли "Цена по запросу"
+            price_query_div = elem.find("div", class_="products__zero-text")
+            if price_query_div:
+                price_display = price_query_div.get_text(strip=True)
+            elif price_wrapper:
+                price_span = price_wrapper.find("span", class_="price")
+                raw_price = price_span.get_text(strip=True) if price_span else ""
+                if raw_price:
+                    numbers = re.findall(r'\d+[,.]\d+', raw_price)
+                    if numbers:
+                        price_numeric = float(numbers[0].replace(',', '.'))
+                    else:
+                        match = re.search(r'\d+', raw_price)
+                        price_numeric = float(match.group()) if match else 0.0
+                    price_display = f"{price_numeric} ₽/шт."
+    
+            # Извлекаем ссылку на товар
+            link_elem = elem.find("a", href=True)
+            link = urljoin("https://promispb.ru/", link_elem["href"]) if link_elem else url
+    
+            # Извлекаем изображение
+            img_tag = elem.find("img")
+            img_url = ""
+            if img_tag:
+                # Используем атрибуты data-src, data-srcset, затем src
+                img_url = img_tag.get("data-src") or img_tag.get("data-srcset") or img_tag.get("src") or ""
+                if img_url.startswith("/"):
+                    img_url = urljoin("https://promispb.ru/", img_url)
+    
+            # Извлекаем упаковку – ищем элемент с классом "js-stock-base-ratio"
+            step = 1
+            ratio_div = elem.find("div", class_="products__pr-price-ratio")
+            if ratio_div:
+                ratio_span = ratio_div.find("span", class_="js-stock-base-ratio")
+                if ratio_span:
+                    ratio_text = ratio_span.get_text(strip=True)
+                    try:
+                        # Удаляем пробелы (например, "1 000" становится "1000")
+                        step = int(ratio_text.replace(" ", ""))
+                    except ValueError:
+                        step = 1
+            quantity = step  # начальное количество = упаковка
+    
+            products.append({
+                "name": name,
+                "price": price_numeric if price_numeric > 0 else None,  # Отображаем None, если "Цена по запросу"
+                "price_display": price_display,  # Отображаем либо цену, либо "Цена по запросу"
+                "site": "promispb",
+                "link": link,
+                "img_url": img_url,
+                "quantity": quantity,
+                "step": step,
+                "availability": availability  # Отображает "Нет в наличии", если товара нет
+            })
+        except Exception as e:
+            print("Ошибка при парсинге товара promispb:", e)
+    
+    return products

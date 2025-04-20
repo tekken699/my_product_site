@@ -1,43 +1,44 @@
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
+# gudvin_parser.py
+
+import logging
+import time
+import re
+from urllib.parse import quote, urljoin
+from bs4 import BeautifulSoup
 from selenium.webdriver.common.by import By 
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from bs4 import BeautifulSoup
-from urllib.parse import quote, urljoin
-import time
-import re
 
-def parse_gudvin(query):
+from driver_utils import get_driver
+from common_regex import DECIMAL_REGEX, INTEGER_REGEX, PACK_REGEX_GUDVIN
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+def parse_gudvin(query: str):
     encoded_query = quote(query)
     url = f"https://gudvin-group.ru/?search={encoded_query}&s=1"
+    logger.info("[GUDVIN DEBUG] Request URL: %s", url)
     
-    options = Options()
-    options.add_argument("--headless")
-    options.add_argument("--disable-gpu")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
-    
-    driver = webdriver.Chrome(options=options)
-    driver.get(url)
-    
+    driver = get_driver()
     try:
+        driver.get(url)
         WebDriverWait(driver, 15).until(
             EC.presence_of_all_elements_located((By.CSS_SELECTOR, ".product-card, .product-item, .product-snippet"))
         )
+        time.sleep(0.3)
+        page_source = driver.page_source
     except Exception as e:
-        print("[GUDVIN DEBUG] Timeout waiting for elements:", e)
-    
-    time.sleep(0.5)
-    page_source = driver.page_source
-    driver.quit()
+        logger.error("[GUDVIN DEBUG] Ошибка при загрузке страницы: %s", e)
+        page_source = ""
+    finally:
+        driver.quit()
     
     soup = BeautifulSoup(page_source, "html.parser")
-    
     product_elems = soup.find_all("div", class_="product-card")
     if not product_elems:
         product_elems = soup.select("div.product-item, div.product-snippet")
-        print(f"[GUDVIN DEBUG] Использую альтернативный селектор, найдено {len(product_elems)} элементов")
+        logger.info("[GUDVIN DEBUG] Использую альтернативный селектор, найдено %d элементов", len(product_elems))
     
     products = []
     for elem in product_elems:
@@ -48,17 +49,18 @@ def parse_gudvin(query):
                 img_elem = elem.find("img", alt=True)
                 title = img_elem["alt"].strip() if img_elem and img_elem.has_attr("alt") else "Без названия"
     
-            # Извлечение упаковочных данных: ищем шаблон "уп: 50 шт"
-            quantity_elem = elem.find("span", class_="product-snippet-data-quantity")
+            # Извлечение упаковочных данных
             step = 1
+            quantity_elem = elem.find("span", class_="product-snippet-data-quantity")
             if quantity_elem:
                 text_quantity = quantity_elem.get_text(" ", strip=True)
-                m = re.search(r'уп[:\s]*(\d+)\s*шт', text_quantity, re.IGNORECASE)
+                m = PACK_REGEX_GUDVIN.search(text_quantity)
                 if m:
                     step = int(m.group(1))
-            quantity = step  # по умолчанию количество равно упаковке
+            quantity = step
     
             # Извлечение цены
+            price_value = 0.0
             price_elem = elem.find("span", class_="price-value")
             if not price_elem:
                 price_elem = elem.find("div", class_="product-price")
@@ -72,7 +74,7 @@ def parse_gudvin(query):
                         span_price = price_container.find("span")
                         if span_price:
                             price_text = span_price.get_text(strip=True)
-                            numbers = re.findall(r'\d+\.\d+', price_text)
+                            numbers = DECIMAL_REGEX.findall(price_text)
                             price_value = float(numbers[0]) if numbers else 0.0
                         else:
                             price_value = 0.0
@@ -80,7 +82,7 @@ def parse_gudvin(query):
                     price_value = 0.0
             else:
                 price_text = price_elem.get_text(strip=True)
-                numbers = re.findall(r'\d+\.\d+', price_text)
+                numbers = DECIMAL_REGEX.findall(price_text)
                 price_value = float(numbers[0]) if numbers else 0.0
     
             link_elem = elem.find("a", href=True)
@@ -128,11 +130,11 @@ def parse_gudvin(query):
                 "site": "Gudvin Group",
                 "link": link,
                 "img_url": img_url,
-                "quantity": quantity,  # количество = упаковка
-                "step": step,          # упаковка, например 50 шт
+                "quantity": quantity,
+                "step": step,
                 "availability": availability
             })
         except Exception as e:
-            print("Ошибка при парсинге товара Gudvin:", e)
+            logger.error("Ошибка при парсинге товара Gudvin: %s", e)
     
     return products
