@@ -1,6 +1,6 @@
 // Глобальные переменные для хранения результатов поиска и текущего номера страницы для каждого магазина
 let globalData = null;
-let storePages = {}; // Например: { "gudvin": 0, "promispb": 0, ... }
+let storePages = {}; // Например: { "gudvin": 0, "promispb": 0, ... } – изначально все нули
 
 // Функция выполнения поиска: отправляем AJAX-запрос на /api/search
 async function performSearch() {
@@ -10,7 +10,7 @@ async function performSearch() {
     return;
   }
 
-  // Считываем фильтры: минимальная цена, максимальная и опция сортировки
+  // Считываем фильтры: минимальная и максимальная цена и опция сортировки
   const minPrice = parseFloat(document.getElementById("min-price").value) || 0;
   const maxPrice = parseFloat(document.getElementById("max-price").value) || Infinity;
   const sortOption = document.getElementById("sort").value;
@@ -38,28 +38,22 @@ async function performSearch() {
   }
 }
 
-// Функция отображения результатов по магазинам (6 карточек на страницу)
+// Функция отображения результатов по магазинам с постраничностью (6 карточек на страницу)
 function displayStoreProducts(minPrice, maxPrice, sortOption) {
   const resultsContainer = document.getElementById("results");
   resultsContainer.innerHTML = "";
   let storesFound = false;
-  const itemsPerPage = 6;
+  const itemsPerPage = 5;
 
+  // Проходим по каждому магазину в глобальных данных
   for (let store in globalData) {
     if (!Array.isArray(globalData[store])) continue;
 
     // Фильтрация товаров по цене
     let products = globalData[store].filter(item => item.price >= minPrice && item.price <= maxPrice);
 
-    // Если выбрана сортировка по наличию, оставляем только товары, которые в наличии
-    if (sortOption === "availableOnly") {
-      products = products.filter(item => {
-        if (!item.availability) return false;
-        let status = item.availability.trim().toLowerCase();
-        // Считаем товар доступным, если в статусе есть "в наличии", и он не начинается с "нет" и не содержит "под заказ"
-        return status.includes("в наличии") && !status.startsWith("нет") && !status.includes("под заказ");
-      });
-    } else if (sortOption === "priceAsc") {
+    // Применяем сортировку при необходимости
+    if (sortOption === "priceAsc") {
       products.sort((a, b) => a.price - b.price);
     } else if (sortOption === "priceDesc") {
       products.sort((a, b) => b.price - a.price);
@@ -68,6 +62,7 @@ function displayStoreProducts(minPrice, maxPrice, sortOption) {
     if (products.length === 0) continue;
     storesFound = true;
 
+    // Определяем текущую страницу для магазина
     let currentPage = storePages.hasOwnProperty(store) ? storePages[store] : 0;
     const startIndex = currentPage * itemsPerPage;
     const endIndex = startIndex + itemsPerPage;
@@ -87,16 +82,15 @@ function displayStoreProducts(minPrice, maxPrice, sortOption) {
     const productGrid = document.createElement("div");
     productGrid.classList.add("product-grid");
 
-    // Для каждого продукта устанавливаем свойство store для корректной работы добавления в корзину
+    // Добавляем карточки товаров
     pageProducts.forEach(product => {
       if (!product.name || !product.link) return;
-      product.store = store;
       const card = createProductCard(product);
       productGrid.appendChild(card);
     });
     storeBlock.appendChild(productGrid);
 
-    // Блок навигации: кнопки "Вперед" и "Назад"
+    // Блок навигации: кнопка "Вперед" сверху и кнопка "Назад" снизу
     const navContainer = document.createElement("div");
     navContainer.classList.add("store-nav");
 
@@ -116,6 +110,7 @@ function displayStoreProducts(minPrice, maxPrice, sortOption) {
       displayStoreProducts(minPrice, maxPrice, sortOption);
     });
 
+    // Располагаем навигационные кнопки вертикально: "Вперед" сверху, затем "Назад"
     navContainer.appendChild(nextButton);
     navContainer.appendChild(prevButton);
     storeBlock.appendChild(navContainer);
@@ -128,7 +123,6 @@ function displayStoreProducts(minPrice, maxPrice, sortOption) {
   }
 }
 
-
 // Функция для создания карточки товара
 function createProductCard(product) {
   const card = document.createElement("div");
@@ -137,7 +131,7 @@ function createProductCard(product) {
   const img = document.createElement("img");
   img.src = product.img_url || "placeholder.png";
   img.alt = product.name;
-  img.loading = "lazy"; // ленивый режим загрузки
+  img.loading = "lazy"; // Новый атрибут для ленивой загрузки
   card.appendChild(img);
 
   const content = document.createElement("div");
@@ -148,59 +142,28 @@ function createProductCard(product) {
   content.appendChild(title);
 
   const price = document.createElement("p");
-  price.textContent = product.price_display || `${product.price.toFixed(2)} руб.`;
+  price.textContent =
+    product.price_display || `${product.price.toFixed(2)} руб.`;
   content.appendChild(price);
 
-  // Обработка статуса availability с раскраской
   if (product.availability) {
     const avail = document.createElement("p");
     avail.textContent = product.availability;
-    let status = product.availability.trim().toLowerCase();
-    // Если статус содержит "в наличии", но не начинается с "нет" и не содержит "под заказ"
-    if (status.includes("в наличии") && !status.startsWith("нет") && !status.includes("под заказ")) {
-      avail.classList.add("status-available");
-    } else if (status.includes("под заказ")) {
-      avail.classList.add("status-order");
-    } else if (status.startsWith("нет")) {
-      avail.classList.add("status-unavailable");
-    }
     content.appendChild(avail);
   }
 
   const addBtn = document.createElement("button");
   addBtn.textContent = "Добавить в корзину";
-  // Если статус availability указан, проверяем его и блокируем кнопку, если товар недоступен
-  if (product.availability) {
-    let status = product.availability.trim().toLowerCase();
-    // Блокируем, если статус содержит "под заказ" или начинается с "нет"
-    if (status.includes("под заказ") || status.startsWith("нет")) {
-      addBtn.disabled = true;
-      addBtn.textContent = status.includes("под заказ") ? "Под заказ" : "Нет в наличии";
-      addBtn.style.backgroundColor = "#ccc";
-      addBtn.style.cursor = "not-allowed";
-    }
-  }
-  // Если кнопка активна, при клике показываем приятную анимацию (галочка), затем вызываем addToCart
-  addBtn.addEventListener("click", function () {
-    if (!this.disabled) {
-      let originalText = this.textContent;
-      this.textContent = "✓";
-      setTimeout(() => {
-        this.textContent = originalText;
-      }, 1500);
-      window.addToCart(product);
-    }
-  });
+  addBtn.addEventListener("click", () => addToCart(product));
   content.appendChild(addBtn);
 
   card.appendChild(content);
+
   card.addEventListener("dblclick", () => window.open(product.link, "_blank"));
   return card;
 }
 
-
-
-// Функция для преобразования ключа магазина в читаемое имя
+// Преобразование ключа магазина в читаемое имя
 function getStoreName(storeKey) {
   const mapping = {
     "gudvin": "Gudvin Group",
@@ -210,8 +173,10 @@ function getStoreName(storeKey) {
     "newpackspb": "NewPacksPB",
     "promindus": "Promindus"
   };
-  return mapping[storeKey] || (storeKey.charAt(0).toUpperCase() + storeKey.slice(1));
+  return mapping[storeKey] || storeKey.charAt(0).toUpperCase() + storeKey.slice(1);
 }
+
+
 
 // Обработчики событий
 document.getElementById("search-form").addEventListener("submit", e => {

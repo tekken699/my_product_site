@@ -94,22 +94,6 @@ header h1 {
   text-align: left;
 }
 
-.status-available {
-  color: #5cb85c; /* зеленый */
-  font-weight: bold;
-}
-
-.status-order {
-  color: #f0ad4e; /* оранжевый */
-  font-weight: bold;
-}
-
-.status-unavailable {
-  color: #d9534f; /* красный */
-  font-weight: bold;
-}
-
-
 /* Сетка карточек: строго 6 колонок на широких экранах, выравнено по левой стороне */
 .product-grid {
   display: grid;
@@ -144,10 +128,10 @@ header h1 {
 }
 .product-card img {
   display: block;
-  margin: 0 auto;
+  margin: 0 auto; /* Центрирует картинку */
   width: 70%;
   height: 180px;
-  object-fit: contain;
+  object-fit: cover;
 }
 
 .product-card .card-content {

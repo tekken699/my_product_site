@@ -28,23 +28,11 @@ def index():
 def cart():
     return render_template('cart.html')
 
-# Новый вариант is_refinement: считаем, что новый запрос уточнение,
-# если все ненумерические токены из базового остаются в новом запросе.
+# Функция проверки, является ли новый запрос уточнением базового:
 def is_refinement(new_query, base_query):
     new_tokens = new_query.lower().split()
     base_tokens = base_query.lower().split()
-    if new_tokens == base_tokens:
-        return False
-
-    def is_numeric(token):
-        try:
-            float(token)
-            return True
-        except ValueError:
-            return False
-
-    base_non_numeric = [token for token in base_tokens if not is_numeric(token)]
-    return all(token in new_tokens for token in base_non_numeric)
+    return len(new_tokens) > len(base_tokens) and all(token in new_tokens for token in base_tokens)
 
 # Асинхронная функция для параллельного запуска парсеров
 async def run_parsers(query, stores):
@@ -103,7 +91,26 @@ def api_search():
         
         app.logger.debug("После фильтрации, результаты: %s", {store: len(lst) for store, lst in refined_results.items()})
         
-        # В обоих случаях (даже если фильтрация дает пустой результат) возвращаем отфильтрованные данные:
+        if sum(len(lst) for lst in refined_results.values()) == 0:
+            app.logger.debug("Фильтрация по уточняющему запросу дала пустой результат. Выполняем полный парсинг для запроса: %s", query)
+            stores = {
+                "gudvin": gudvin.parse_gudvin,
+                "promispb": promispb.parse_promispb,
+                "hozka": hozka.parse_hozka,
+                "artplast": artplast.parse_artplast,
+                "newpackspb": newpackspb.parse_newpackspb
+            }
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                refined_results = loop.run_until_complete(run_parsers(query, stores))
+                app.logger.debug("Новый поиск для '%s' дал результаты: %s", query, {store: len(lst) for store, lst in refined_results.items()})
+            except Exception as e:
+                refined_results = {}
+                app.logger.error("Async parser error: %s", e)
+            finally:
+                loop.close()
+        
         cache.set(cache_key, refined_results)
         session["last_query"] = query
         session["last_cache_key"] = cache_key
@@ -235,13 +242,13 @@ def cart_checkout():
     session["cart"] = []
     return jsonify({"message": "Заказ оформлен, спасибо!", "cart": []})
 
-# Маршрут для очистки всей корзины
+# Новый маршрут для очистки всей корзины
 @app.route('/api/cart/clear_all', methods=['POST'])
 def clear_cart_all():
     session["cart"] = []
     return jsonify({"message": "Вся корзина очищена", "cart": []})
 
-# Маршрут для очистки корзины в группе
+# Новый маршрут для очистки корзины в конкретной группе
 @app.route('/api/cart/clear_group', methods=['POST'])
 def clear_cart_group():
     data = request.get_json()

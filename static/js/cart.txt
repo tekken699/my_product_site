@@ -1,0 +1,175 @@
+// Функция для добавления товара в корзину – теперь передаём упаковочные данные
+async function addToCart(product) {
+  try {
+    const response = await fetch("/api/cart/add", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        product: {
+          name: product.name,
+          link: product.link,
+          // Используем переданное количество (оно должно быть установлено равным упаковке) 
+          quantity: product.quantity || 1,
+          // Передаем цену, отображаемое значение цены и упаковку
+          price: product.price,
+          price_display: product.price_display,
+          availability: product.availability,
+          img_url: product.img_url,
+          step: product.step || 1
+        }
+      })
+    });
+    const data = await response.json();
+    console.log("Товар добавлен в корзину", data);
+    alert("Товар добавлен в корзину");
+    fetchCart(); // обновляем отображение корзины
+  } catch (error) {
+    console.error("Ошибка добавления товара в корзину", error);
+    alert("Ошибка добавления товара в корзину");
+  }
+}
+
+// Функция для получения данных корзины с сервера
+async function fetchCart() {
+  try {
+    const response = await fetch("/api/cart", {
+      credentials: "same-origin"
+    });
+    const cart = await response.json();
+    renderCart(cart);
+  } catch (error) {
+    console.error("Ошибка получения корзины", error);
+  }
+}
+
+// Функция для отображения корзины на странице
+function renderCart(cart) {
+  const cartDiv = document.getElementById("cart");
+  cartDiv.innerHTML = "";
+  if (cart.length === 0) {
+    cartDiv.innerHTML = "<p>Корзина пуста</p>";
+    return;
+  }
+  
+  let overallTotal = 0;
+  cart.forEach((item) => {
+    const itemDiv = document.createElement("div");
+    itemDiv.className = "cart-item";
+
+    // Название товара
+    const name = document.createElement("span");
+    name.textContent = item.name + " ";
+    itemDiv.appendChild(name);
+
+    // Отображение упаковочной информации (например, "50 шт/уп.")
+    if (item.step) {
+      const packInfo = document.createElement("span");
+      packInfo.textContent = `(${item.step} шт/уп.) `;
+      itemDiv.appendChild(packInfo);
+    }
+
+    // Поле ввода количества – задаем min и step равными упаковке
+    const quantityInput = document.createElement("input");
+    quantityInput.type = "number";
+    quantityInput.value = item.quantity;
+    quantityInput.min = item.step || 1;
+    quantityInput.step = item.step || 1;
+    quantityInput.dataset.link = item.link;
+    itemDiv.appendChild(quantityInput);
+
+    // Расчет итоговой цены для позиции:
+    // Если цена указана за единицу, то итог для данной позиции = price * quantity.
+    // Если цена уже за упаковку, то логика может поменяться (но здесь считаем, что price – цена за 1 шт.)
+    const itemTotal = item.price * item.quantity;
+    overallTotal += itemTotal;
+    const totalLabel = document.createElement("span");
+    totalLabel.textContent = ` = ${itemTotal.toFixed(2)} руб.`;
+    itemDiv.appendChild(totalLabel);
+
+    // Кнопка обновления количества
+    const updateBtn = document.createElement("button");
+    updateBtn.textContent = "Обновить";
+    updateBtn.onclick = async function() {
+      const newQuantity = +quantityInput.value;
+      await updateCartItem(item.link, newQuantity);
+      fetchCart();
+    };
+    itemDiv.appendChild(updateBtn);
+
+    // Кнопка удаления товара из корзины
+    const removeBtn = document.createElement("button");
+    removeBtn.textContent = "Удалить";
+    removeBtn.onclick = async function() {
+      await removeCartItem(item.link);
+      fetchCart();
+    };
+    itemDiv.appendChild(removeBtn);
+
+    cartDiv.appendChild(itemDiv);
+  });
+
+  // Общий итог по корзине
+  const overallDiv = document.createElement("div");
+  overallDiv.className = "cart-overall";
+  overallDiv.textContent = `Общий итог: ${overallTotal.toFixed(2)} руб.`;
+  cartDiv.appendChild(overallDiv);
+}
+
+// Функция для обновления количества товара в корзине
+async function updateCartItem(link, quantity) {
+  try {
+    const response = await fetch("/api/cart/update", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ link: link, quantity: quantity })
+    });
+    const data = await response.json();
+    console.log("Корзина обновлена", data);
+  } catch (error) {
+    console.error("Ошибка обновления товара", error);
+  }
+}
+
+// Функция для удаления товара из корзины
+async function removeCartItem(link) {
+  try {
+    const response = await fetch("/api/cart/remove", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ link: link })
+    });
+    const data = await response.json();
+    console.log("Товар удалён из корзины", data);
+  } catch (error) {
+    console.error("Ошибка удаления товара", error);
+  }
+}
+
+// Функция для оформления заказа
+async function checkoutCart() {
+  try {
+    const response = await fetch("/api/cart/checkout", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"}
+    });
+    const data = await response.json();
+    alert(data.message);
+    fetchCart();
+  } catch (error) {
+    console.error("Ошибка оформления заказа", error);
+  }
+}
+
+// Привязка обработчика к кнопке оформления заказа
+document.getElementById("checkout-btn").addEventListener("click", async function(event) {
+  event.preventDefault();
+  await checkoutCart();
+});
+
+// Обновление корзины при загрузке страницы
+window.addEventListener("DOMContentLoaded", fetchCart);

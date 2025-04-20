@@ -29,7 +29,7 @@ def parse_artplast(query):
     except Exception as e:
         print("[ARTPLAST DEBUG] Timeout waiting for products:", e)
     
-    time.sleep(0.5)
+    time.sleep(1)
     page_source = driver.page_source
     driver.quit()
     

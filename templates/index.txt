@@ -13,8 +13,6 @@
         <input type="text" id="search-input" placeholder="Введите поисковый запрос" />
         <button type="submit">Найти</button>
       </form>
-      <!-- Кнопка для перехода в корзину -->
-      <a href="{{ url_for('cart') }}" class="cart-link-btn">Корзина</a>
     </header>
     
     <!-- Фильтры -->
@@ -28,16 +26,24 @@
         <option value="default">По умолчанию</option>
         <option value="priceAsc">Цена: по возрастанию</option>
         <option value="priceDesc">Цена: по убыванию</option>
-        <option value="availableOnly">В наличии</option>
       </select>
       <button id="apply-filters">Применить</button>
     </section>
     
-    <!-- Контейнер результатов -->
+    <!-- Общее содержимое: результаты и корзина -->
     <div id="main-content">
+      <!-- Контейнер результатов – сюда скриптом добавляются блоки с товарами для каждого магазина -->
       <section id="results"></section>
+      <!-- Боковая колонка для корзины -->
+      <aside id="cart-container">
+        <h2>Корзина</h2>
+        <div id="cart">
+          <!-- Здесь отображается содержимое корзины -->
+        </div>
+        <button id="checkout-btn">Оформить заказ</button>
+      </aside>
     </div>
-    
+
     <script src="{{ url_for('static', filename='js/cart.js') }}"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
   </body>

@@ -1,117 +1,305 @@
-// Функция для получения данных корзины с сервера
-async function fetchCart() {
-    try {
-       const response = await fetch("/api/cart");
-       const cart = await response.json();
-       renderCart(cart);
-    } catch (error) {
-       console.error("Ошибка получения корзины", error);
-    }
+// Локальная функция для преобразования ключа поставщика в читаемое имя
+function getStoreName(storeKey) {
+  const mapping = {
+    "gudvin": "Gudvin Group",
+    "promispb": "Promispb",
+    "hozka": "Hozka.pro",
+    "artplast": "ArtPlast",
+    "newpackspb": "NewPacksPB",
+    "promindus": "Promindus",
+    "неизвестно": "Неизвестно"
+  };
+  return mapping[storeKey] || (storeKey.charAt(0).toUpperCase() + storeKey.slice(1));
 }
 
-// Функция для отображения корзины на странице
-function renderCart(cart) {
-    const cartDiv = document.getElementById("cart");
-    cartDiv.innerHTML = "";
-    if (cart.length === 0) {
-       cartDiv.innerHTML = "<p>Корзина пуста</p>";
-       return;
-    }
-
-    cart.forEach((item) => {
-       const itemDiv = document.createElement("div");
-       itemDiv.className = "cart-item";
-
-       // Название товара
-       const name = document.createElement("span");
-       name.textContent = item.name + " ";
-       itemDiv.appendChild(name);
-
-       // Поле ввода количества
-       const quantityInput = document.createElement("input");
-       quantityInput.type = "number";
-       quantityInput.value = item.quantity;
-       quantityInput.min = 1;
-       quantityInput.dataset.link = item.link;
-       itemDiv.appendChild(quantityInput);
-
-       // Кнопка обновления количества
-       const updateBtn = document.createElement("button");
-       updateBtn.textContent = "Обновить";
-       updateBtn.onclick = async function() {
-           const newQuantity = +quantityInput.value;
-           await updateCartItem(item.link, newQuantity);
-           fetchCart();
-       };
-       itemDiv.appendChild(updateBtn);
-
-       // Кнопка удаления товара из корзины
-       const removeBtn = document.createElement("button");
-       removeBtn.textContent = "Удалить";
-       removeBtn.onclick = async function() {
-           await removeCartItem(item.link);
-           fetchCart();
-       };
-       itemDiv.appendChild(removeBtn);
-
-       cartDiv.appendChild(itemDiv);
+// Функция для добавления товара в корзину – передаём данные, включая store
+// Функция для добавления товара в корзину – передаём данные, включая store
+async function addToCart(product) {
+  try {
+    const response = await fetch("/api/cart/add", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        product: {
+          name: product.name,
+          link: product.link,
+          quantity: product.quantity || 1,
+          price: product.price,
+          price_display: product.price_display,
+          availability: product.availability,
+          img_url: product.img_url,
+          step: product.step || 1,
+          store: product.store || "неизвестно"
+        }
+      })
     });
+    const data = await response.json();
+    console.log("Товар добавлен в корзину", data);
+    // Уведомление заменено приятной анимацией на кнопке, поэтому alert удаляем.
+    fetchCart();
+  } catch (error) {
+    console.error("Ошибка добавления товара в корзину", error);
+  }
+}
+
+// Функция для получения данных корзины
+async function fetchCart() {
+  try {
+    const response = await fetch("/api/cart", { credentials: "same-origin" });
+    const cart = await response.json();
+    renderCart(cart);
+  } catch (error) {
+    console.error("Ошибка получения корзины", error);
+  }
+}
+
+// Функция для отображения корзины с группировкой по поставщикам
+function renderCart(cart) {
+  const cartDiv = document.getElementById("cart");
+  if (!cartDiv) return;
+  cartDiv.innerHTML = "";
+  if (cart.length === 0) {
+    cartDiv.innerHTML = "<p>Корзина пуста</p>";
+    return;
+  }
+  
+  // Группировка товаров по поставщику
+  const groups = {};
+  cart.forEach(item => {
+    const supplier = item.store || "неизвестно";
+    if (!groups[supplier]) groups[supplier] = [];
+    groups[supplier].push(item);
+  });
+  
+  // Создание вкладок для каждого поставщика
+  const tabsContainer = document.createElement("div");
+  tabsContainer.className = "cart-tabs";
+  
+  const suppliers = Object.keys(groups).sort((a, b) => a.localeCompare(b));
+  suppliers.forEach(supplier => {
+    const btn = document.createElement("button");
+    btn.textContent = getStoreName(supplier);
+    btn.className = "cart-tab-btn";
+    btn.dataset.supplier = supplier;
+    btn.addEventListener("click", function() {
+      document.querySelectorAll(".cart-tab-btn").forEach(b => b.classList.remove("active"));
+      this.classList.add("active");
+      window.currentSupplier = this.dataset.supplier;
+      renderItems(this.dataset.supplier);
+    });
+    tabsContainer.appendChild(btn);
+  });
+  
+  cartDiv.appendChild(tabsContainer);
+  
+  // Контейнер для отображения товаров выбранной группы
+  const itemsContainer = document.createElement("div");
+  itemsContainer.className = "cart-items-container";
+  
+  function renderItems(filterSupplier) {
+    itemsContainer.innerHTML = "";
+    let filteredItems = groups[filterSupplier] || [];
+    let overallTotal = 0;
+    
+    filteredItems.forEach(item => {
+      overallTotal += item.price * item.quantity;
+      const itemContainer = document.createElement("div");
+      itemContainer.className = "cart-item";
+      
+      if (item.img_url) {
+        const img = document.createElement("img");
+        img.className = "cart-item-image";
+        img.src = item.img_url;
+        img.alt = item.name;
+        itemContainer.appendChild(img);
+      }
+      
+      const detailsDiv = document.createElement("div");
+      detailsDiv.className = "cart-item-details";
+      
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "cart-item-name";
+      nameSpan.textContent = item.name;
+      detailsDiv.appendChild(nameSpan);
+      
+      const summary = document.createElement("span");
+      summary.className = "cart-item-summary";
+      summary.textContent = `Qty: ${item.quantity} | ${item.price_display || (item.price.toFixed(2) + " руб.")}`;
+      detailsDiv.appendChild(summary);
+      
+      const controls = document.createElement("div");
+      controls.className = "cart-item-controls";
+      
+      const minusBtn = document.createElement("button");
+      minusBtn.className = "cart-btn control-btn minus";
+      minusBtn.textContent = "–";
+      minusBtn.onclick = async () => {
+        const newQty = Math.max(item.step, item.quantity - item.step);
+        await updateCartItem(item.link, newQty);
+        fetchCart();
+      };
+      controls.appendChild(minusBtn);
+      
+      const qtyInput = document.createElement("input");
+      qtyInput.type = "number";
+      qtyInput.className = "cart-quantity";
+      qtyInput.value = item.quantity;
+      qtyInput.min = item.step || 1;
+      qtyInput.step = item.step || 1;
+      qtyInput.dataset.link = item.link;
+      controls.appendChild(qtyInput);
+      
+      const plusBtn = document.createElement("button");
+      plusBtn.className = "cart-btn control-btn plus";
+      plusBtn.textContent = "+";
+      plusBtn.onclick = async () => {
+        const newQty = item.quantity + item.step;
+        await updateCartItem(item.link, newQty);
+        fetchCart();
+      };
+      controls.appendChild(plusBtn);
+      
+      const removeBtn = document.createElement("button");
+      removeBtn.className = "cart-item-remove";
+      removeBtn.textContent = "Удалить";
+      removeBtn.onclick = async () => {
+        await removeCartItem(item.link);
+        fetchCart();
+      };
+      controls.appendChild(removeBtn);
+      
+      detailsDiv.appendChild(controls);
+      
+      const totalLabel = document.createElement("div");
+      totalLabel.className = "cart-item-total";
+      totalLabel.textContent = `Итого: ${(item.price * item.quantity).toFixed(2)} руб.`;
+      detailsDiv.appendChild(totalLabel);
+      
+      itemContainer.appendChild(detailsDiv);
+      itemsContainer.appendChild(itemContainer);
+    });
+    
+    const overallDiv = document.createElement("div");
+    overallDiv.className = "cart-overall";
+    overallDiv.textContent = `Общий итог: ${overallTotal.toFixed(2)} руб.`;
+    itemsContainer.appendChild(overallDiv);
+  }
+  
+  // Если ранее выбран поставщик сохранён, используем его; иначе берём первую вкладку
+  let selectedSupplier = window.currentSupplier;
+  if (!selectedSupplier && suppliers.length > 0) {
+    selectedSupplier = suppliers[0];
+  }
+  if (selectedSupplier) {
+    tabsContainer.querySelectorAll(".cart-tab-btn").forEach(btn => btn.classList.remove("active"));
+    const activeBtn = tabsContainer.querySelector(`[data-supplier="${selectedSupplier}"]`);
+    if (activeBtn) {
+      activeBtn.classList.add("active");
+    }
+    renderItems(selectedSupplier);
+    window.currentSupplier = selectedSupplier;
+  }
+  
+  cartDiv.appendChild(itemsContainer);
+  
+  // Контейнер для кнопок очистки корзины
+  const clearContainer = document.createElement("div");
+  clearContainer.className = "cart-clear-container";
+  
+  // Кнопка для очистки всей корзины
+  const clearAllBtn = document.createElement("button");
+  clearAllBtn.className = "cart-clear-all-btn";
+  clearAllBtn.textContent = "Очистить всю корзину";
+  clearAllBtn.addEventListener("click", async () => {
+    if (confirm("Вы действительно хотите очистить всю корзину?")) {
+      await fetch("/api/cart/clear_all", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" }
+      });
+      window.currentSupplier = null;
+      fetchCart();
+    }
+  });
+  clearContainer.appendChild(clearAllBtn);
+  
+  // Кнопка для очистки корзины в текущей группе
+  const clearGroupBtn = document.createElement("button");
+  clearGroupBtn.className = "cart-clear-group-btn";
+  clearGroupBtn.textContent = "Очистить корзину в группе";
+  clearGroupBtn.addEventListener("click", async () => {
+    const supplier = window.currentSupplier;
+    if (!supplier) return;
+    if (confirm(`Вы действительно хотите очистить товары группы "${getStoreName(supplier)}"?`)) {
+      await fetch("/api/cart/clear_group", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ store: supplier })
+      });
+      fetchCart();
+    }
+  });
+  clearContainer.appendChild(clearGroupBtn);
+  
+  cartDiv.appendChild(clearContainer);
+  
+  // Добавляем кнопку оформления заказа (зелёная)
+  const checkoutBtn = document.createElement("button");
+  checkoutBtn.className = "cart-checkout-btn";
+  checkoutBtn.textContent = "Оформить заказ";
+  checkoutBtn.addEventListener("click", async (e) => {
+    e.preventDefault();
+    await checkoutCart();
+  });
+  cartDiv.appendChild(checkoutBtn);
 }
 
 // Функция для обновления количества товара в корзине
 async function updateCartItem(link, quantity) {
-   try {
-      const response = await fetch("/api/cart/update", {
-         method: "POST",
-         headers: {
-           "Content-Type": "application/json"
-         },
-         body: JSON.stringify({ link: link, quantity: quantity })
-      });
-      const data = await response.json();
-      console.log("Корзина обновлена", data);
-   } catch (error) {
-      console.error("Ошибка обновления товара", error);
-   }
+  try {
+    const response = await fetch("/api/cart/update", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ link: link, quantity: quantity })
+    });
+    const data = await response.json();
+    console.log("Корзина обновлена", data);
+  } catch (error) {
+    console.error("Ошибка обновления товара", error);
+  }
 }
 
 // Функция для удаления товара из корзины
 async function removeCartItem(link) {
-   try {
-      const response = await fetch("/api/cart/remove", {
-         method: "POST",
-         headers: {
-           "Content-Type": "application/json"
-         },
-         body: JSON.stringify({ link: link })
-      });
-      const data = await response.json();
-      console.log("Товар удалён из корзины", data);
-   } catch (error) {
-      console.error("Ошибка удаления товара", error);
-   }
+  try {
+    const response = await fetch("/api/cart/remove", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ link: link })
+    });
+    const data = await response.json();
+    console.log("Товар удалён из корзины", data);
+  } catch (error) {
+    console.error("Ошибка удаления товара", error);
+  }
 }
 
 // Функция для оформления заказа
 async function checkoutCart() {
-   try {
-      const response = await fetch("/api/cart/checkout", {
-         method: "POST",
-         headers: {"Content-Type": "application/json"}
-      });
-      const data = await response.json();
-      alert(data.message);
-      fetchCart();
-   } catch (error) {
-      console.error("Ошибка оформления заказа", error);
-   }
+  try {
+    const response = await fetch("/api/cart/checkout", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" }
+    });
+    const data = await response.json();
+    alert(data.message);
+    fetchCart();
+  } catch (error) {
+    console.error("Ошибка оформления заказа", error);
+  }
 }
 
-// Привязка обработчика к кнопке оформления заказа
-document.getElementById("checkout-btn").addEventListener("click", async function(event) {
-   event.preventDefault();
-   await checkoutCart();
-});
-
-// Обновление корзины при загрузке страницы
 window.addEventListener("DOMContentLoaded", fetchCart);
+
+// Экспортируем функцию addToCart глобально
+window.addToCart = addToCart;

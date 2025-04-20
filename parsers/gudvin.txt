@@ -28,7 +28,7 @@ def parse_gudvin(query):
     except Exception as e:
         print("[GUDVIN DEBUG] Timeout waiting for elements:", e)
     
-    time.sleep(0.5)
+    time.sleep(1)
     page_source = driver.page_source
     driver.quit()
     

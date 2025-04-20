@@ -30,7 +30,7 @@ def parse_hozka(query):
     except Exception as e:
         print("[HOZKA DEBUG] Timeout waiting for catalog links:", e)
     
-    time.sleep(0.5)
+    time.sleep(1)
     page_source = driver.page_source
     driver.quit()
     
