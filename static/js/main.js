@@ -1,6 +1,7 @@
 // Глобальные переменные для хранения результатов поиска и текущего номера страницы для каждого магазина
 let globalData = null;
 let storePages = {}; // Например: { "gudvin": 0, "promispb": 0, ... }
+let updateIntervalId = null;
 
 // Функция выполнения поиска: отправляем AJAX-запрос на /api/search
 async function performSearch() {
@@ -15,8 +16,20 @@ async function performSearch() {
   const maxPrice = parseFloat(document.getElementById("max-price").value) || Infinity;
   const sortOption = document.getElementById("sort").value;
 
-  // Выводим сообщение о загрузке
-  document.getElementById("results").innerHTML = "<p>Загрузка товаров...</p>";
+  // Отображаем глобальный спиннер по центру экрана с использованием нового Pixel Loader
+  document.getElementById("results").innerHTML = `
+    <div class="global-spinner">
+      <div class="pixel-loader">
+        <div></div>
+        <div></div>
+        <div></div>
+        <div></div>
+        <div></div>
+        <div></div>
+        <div></div>
+        <div></div>
+      </div>
+    </div>`;
 
   try {
     const response = await fetch("/api/search", {
@@ -30,6 +43,9 @@ async function performSearch() {
     globalData = data;
     storePages = {};
     displayStoreProducts(minPrice, maxPrice, sortOption);
+    // Запускаем опрос обновлений каждые 3 секунды
+    if (updateIntervalId) clearInterval(updateIntervalId);
+    updateIntervalId = setInterval(() => pollForUpdates(query, minPrice, maxPrice, sortOption), 3000);
     // Прокручиваем страницу к контейнеру результатов
     document.getElementById("results").scrollIntoView({ behavior: "smooth" });
   } catch (error) {
@@ -38,12 +54,43 @@ async function performSearch() {
   }
 }
 
-// Функция отображения результатов по магазинам (6 карточек на страницу)
+// Функция опроса обновления результатов
+async function pollForUpdates(query, minPrice, maxPrice, sortOption) {
+  try {
+    const response = await fetch("/api/search/update", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: query })
+    });
+    const updatedData = await response.json();
+    // Если появились новые данные, обновляем глобальный результат и перерисовываем
+    let updated = false;
+    for (let store in updatedData) {
+      if (!globalData[store] || globalData[store].length < updatedData[store].length) {
+        globalData[store] = updatedData[store];
+        updated = true;
+      }
+    }
+    if (updated) {
+      displayStoreProducts(minPrice, maxPrice, sortOption);
+      // Если все магазины уже заполнены, останавливаем опрос
+      let allReady = true;
+      for (let store in globalData) {
+        if (globalData[store].length === 0) allReady = false;
+      }
+      if (allReady) clearInterval(updateIntervalId);
+    }
+  } catch (error) {
+    console.error("Ошибка обновления:", error);
+  }
+}
+
+// Функция отображения результатов по магазинам (5 карточек на страницу)
 function displayStoreProducts(minPrice, maxPrice, sortOption) {
   const resultsContainer = document.getElementById("results");
   resultsContainer.innerHTML = "";
   let storesFound = false;
-  const itemsPerPage = 6;
+  const itemsPerPage = 5;
 
   for (let store in globalData) {
     if (!Array.isArray(globalData[store])) continue;
@@ -51,12 +98,10 @@ function displayStoreProducts(minPrice, maxPrice, sortOption) {
     // Фильтрация товаров по цене
     let products = globalData[store].filter(item => item.price >= minPrice && item.price <= maxPrice);
 
-    // Если выбрана сортировка по наличию, оставляем только товары, которые в наличии
     if (sortOption === "availableOnly") {
       products = products.filter(item => {
         if (!item.availability) return false;
         let status = item.availability.trim().toLowerCase();
-        // Считаем товар доступным, если в статусе есть "в наличии", и он не начинается с "нет" и не содержит "под заказ"
         return status.includes("в наличии") && !status.startsWith("нет") && !status.includes("под заказ");
       });
     } else if (sortOption === "priceAsc") {
@@ -65,15 +110,6 @@ function displayStoreProducts(minPrice, maxPrice, sortOption) {
       products.sort((a, b) => b.price - a.price);
     }
 
-    if (products.length === 0) continue;
-    storesFound = true;
-
-    let currentPage = storePages.hasOwnProperty(store) ? storePages[store] : 0;
-    const startIndex = currentPage * itemsPerPage;
-    const endIndex = startIndex + itemsPerPage;
-    const pageProducts = products.slice(startIndex, endIndex);
-
-    // Создаем блок для данного магазина
     const storeBlock = document.createElement("div");
     storeBlock.classList.add("store-block");
 
@@ -87,13 +123,36 @@ function displayStoreProducts(minPrice, maxPrice, sortOption) {
     const productGrid = document.createElement("div");
     productGrid.classList.add("product-grid");
 
-    // Для каждого продукта устанавливаем свойство store для корректной работы добавления в корзину
-    pageProducts.forEach(product => {
-      if (!product.name || !product.link) return;
-      product.store = store;
-      const card = createProductCard(product);
-      productGrid.appendChild(card);
-    });
+    // Если для магазина данных нет, показываем локальный спиннер с Pixel Loader
+    if (products.length === 0) {
+      const spinner = document.createElement("div");
+      spinner.innerHTML = `
+        <div class="global-spinner">
+          <div class="pixel-loader">
+            <div></div>
+            <div></div>
+            <div></div>
+            <div></div>
+            <div></div>
+            <div></div>
+            <div></div>
+            <div></div>
+          </div>
+        </div>`;
+      productGrid.appendChild(spinner);
+    } else {
+      let currentPage = storePages.hasOwnProperty(store) ? storePages[store] : 0;
+      const startIndex = currentPage * itemsPerPage;
+      const endIndex = startIndex + itemsPerPage;
+      const pageProducts = products.slice(startIndex, endIndex);
+
+      pageProducts.forEach(product => {
+        if (!product.name || !product.link) return;
+        product.store = store;
+        const card = createProductCard(product);
+        productGrid.appendChild(card);
+      });
+    }
     storeBlock.appendChild(productGrid);
 
     // Блок навигации: кнопки "Вперед" и "Назад"
@@ -102,17 +161,17 @@ function displayStoreProducts(minPrice, maxPrice, sortOption) {
 
     const nextButton = document.createElement("button");
     nextButton.textContent = "Вперед";
-    nextButton.disabled = endIndex >= products.length;
+    nextButton.disabled = products.length <= ((storePages[store] || 0) + 1) * itemsPerPage;
     nextButton.addEventListener("click", () => {
-      storePages[store] = currentPage + 1;
+      storePages[store] = (storePages[store] || 0) + 1;
       displayStoreProducts(minPrice, maxPrice, sortOption);
     });
 
     const prevButton = document.createElement("button");
     prevButton.textContent = "Назад";
-    prevButton.disabled = currentPage === 0;
+    prevButton.disabled = (storePages[store] || 0) === 0;
     prevButton.addEventListener("click", () => {
-      storePages[store] = currentPage - 1;
+      storePages[store] = (storePages[store] || 0) - 1;
       displayStoreProducts(minPrice, maxPrice, sortOption);
     });
 
@@ -121,6 +180,7 @@ function displayStoreProducts(minPrice, maxPrice, sortOption) {
     storeBlock.appendChild(navContainer);
 
     resultsContainer.appendChild(storeBlock);
+    storesFound = true;
   }
 
   if (!storesFound) {
@@ -128,35 +188,40 @@ function displayStoreProducts(minPrice, maxPrice, sortOption) {
   }
 }
 
-
-// Функция для создания карточки товара
+// Функция создания карточки товара с быстрыми кнопками для изменения количества
 function createProductCard(product) {
   const card = document.createElement("div");
   card.classList.add("product-card");
 
+  // Изображение товара
   const img = document.createElement("img");
   img.src = product.img_url || "placeholder.png";
   img.alt = product.name;
-  img.loading = "lazy"; // ленивый режим загрузки
+  img.loading = "lazy";
+  // Двойной клик по изображению открывает сайт поставщика
+  img.addEventListener("dblclick", () => window.open(product.link, "_blank"));
   card.appendChild(img);
 
   const content = document.createElement("div");
   content.classList.add("card-content");
 
+  // Заголовок товара (наименование)
   const title = document.createElement("h3");
   title.textContent = product.name;
+  // Двойной клик по наименованию открывает сайт поставщика
+  title.addEventListener("dblclick", () => window.open(product.link, "_blank"));
   content.appendChild(title);
 
+  // Цена товара
   const price = document.createElement("p");
   price.textContent = product.price_display || `${product.price.toFixed(2)} руб.`;
   content.appendChild(price);
 
-  // Обработка статуса availability с раскраской
+  // Отображение статуса наличия
   if (product.availability) {
     const avail = document.createElement("p");
     avail.textContent = product.availability;
     let status = product.availability.trim().toLowerCase();
-    // Если статус содержит "в наличии", но не начинается с "нет" и не содержит "под заказ"
     if (status.includes("в наличии") && !status.startsWith("нет") && !status.includes("под заказ")) {
       avail.classList.add("status-available");
     } else if (status.includes("под заказ")) {
@@ -167,12 +232,11 @@ function createProductCard(product) {
     content.appendChild(avail);
   }
 
+  // Кнопка добавления товара в корзину
   const addBtn = document.createElement("button");
   addBtn.textContent = "Добавить в корзину";
-  // Если статус availability указан, проверяем его и блокируем кнопку, если товар недоступен
   if (product.availability) {
     let status = product.availability.trim().toLowerCase();
-    // Блокируем, если статус содержит "под заказ" или начинается с "нет"
     if (status.includes("под заказ") || status.startsWith("нет")) {
       addBtn.disabled = true;
       addBtn.textContent = status.includes("под заказ") ? "Под заказ" : "Нет в наличии";
@@ -180,7 +244,6 @@ function createProductCard(product) {
       addBtn.style.cursor = "not-allowed";
     }
   }
-  // Если кнопка активна, при клике показываем приятную анимацию (галочка), затем вызываем addToCart
   addBtn.addEventListener("click", function () {
     if (!this.disabled) {
       let originalText = this.textContent;
@@ -189,16 +252,57 @@ function createProductCard(product) {
         this.textContent = originalText;
       }, 1500);
       window.addToCart(product);
+      const quickBlock = card.querySelector(".quick-quantity-controls");
+      if (quickBlock) quickBlock.style.display = "flex";
     }
   });
   content.appendChild(addBtn);
 
+  // Блок быстрых кнопок для изменения количества товара
+  const quickControls = document.createElement("div");
+  quickControls.className = "quick-quantity-controls";
+  quickControls.style.display = "none";
+
+  // Создаём элемент для отображения количества сразу
+  const qtyDisplay = document.createElement("span");
+  qtyDisplay.textContent = product.quantity || 1;
+  qtyDisplay.className = "quick-qty";
+
+  // Кнопка уменьшения количества
+  const minusBtn = document.createElement("button");
+  minusBtn.textContent = "–";
+  minusBtn.className = "quick-btn";
+  minusBtn.addEventListener("click", () => {
+    const step = product.step || 1;
+    const newQty = Math.max(step, (product.quantity || 1) - step);
+    product.quantity = newQty;
+    window.updateCartItem && window.updateCartItem(product.link, newQty);
+    qtyDisplay.textContent = newQty;
+  });
+  quickControls.appendChild(minusBtn);
+
+  // Добавляем отображение количества
+  quickControls.appendChild(qtyDisplay);
+
+  // Кнопка увеличения количества
+  const plusBtn = document.createElement("button");
+  plusBtn.textContent = "+";
+  plusBtn.className = "quick-btn";
+  plusBtn.addEventListener("click", () => {
+    const step = product.step || 1;
+    const newQty = (product.quantity || 1) + step;
+    product.quantity = newQty;
+    window.updateCartItem && window.updateCartItem(product.link, newQty);
+    qtyDisplay.textContent = newQty;
+  });
+  quickControls.appendChild(plusBtn);
+
+  content.appendChild(quickControls);
   card.appendChild(content);
-  card.addEventListener("dblclick", () => window.open(product.link, "_blank"));
+
+  // Обработчики dblclick для перехода на сайт поставщика находятся только на изображении и заголовке
   return card;
 }
-
-
 
 // Функция для преобразования ключа магазина в читаемое имя
 function getStoreName(storeKey) {

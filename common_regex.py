@@ -1,7 +1,7 @@
 # common_regex.py
 import re
 
-# Регулярка для десятичных чисел, например "123,45" или "123.45"
+# Регулярка для десятичных чисел
 DECIMAL_REGEX = re.compile(r'\d+[,.]\d+')
 # Регулярка для целых чисел
 INTEGER_REGEX = re.compile(r'\d+')

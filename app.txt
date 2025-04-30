@@ -1,24 +1,43 @@
 import asyncio
-import concurrent.futures
-from flask import Flask, request, jsonify, render_template, session, Response
+import logging
+from flask import Flask, request, jsonify, render_template, session, redirect, url_for, Response
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import LoginManager, login_user, logout_user, login_required, current_user
+from models import db, User  # models.py должен содержать определение модели User
 from parsers import gudvin, promispb, hozka, artplast, newpackspb
 from services.image_cache import async_get_cached_image
 from flask_caching import Cache
-import logging
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key'
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///myapp.db'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db.init_app(app)
+
+# Инициализация Flask-Login
+login_manager = LoginManager()
+login_manager.login_view = 'login'
+login_manager.init_app(app)
+
+# Инициализация кэширования
 cache = Cache(app, config={'CACHE_TYPE': 'SimpleCache', 'CACHE_DEFAULT_TIMEOUT': 300})
 
-# Настройка логирования с форматированием
+# Настройка логирования
 app.logger.setLevel(logging.DEBUG)
 handler = logging.FileHandler('app_debug.log')
 handler.setLevel(logging.DEBUG)
 formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s [in %(pathname)s:%(lineno)d]')
 handler.setFormatter(formatter)
 app.logger.addHandler(handler)
+app.logger.debug("Logging is setup correctly.")
 
-app.logger.debug("Тестовое сообщение. Логирование настроено правильно.")
+@login_manager.user_loader
+def load_user(user_id):
+    return User.query.get(int(user_id))
+
+# ---------------------
+# Основные маршруты
+# ---------------------
 
 @app.route('/')
 def index():
@@ -28,24 +47,48 @@ def index():
 def cart():
     return render_template('cart.html')
 
-# Функция проверки, является ли новый запрос уточнением базового:
+# ---------------------
+# Вспомогательные функции для API поиска
+# ---------------------
+
 def is_refinement(new_query, base_query):
     new_tokens = new_query.lower().split()
     base_tokens = base_query.lower().split()
-    return len(new_tokens) > len(base_tokens) and all(token in new_tokens for token in base_tokens)
+    if new_tokens == base_tokens:
+        return False
 
-# Асинхронная функция для параллельного запуска парсеров
-async def run_parsers(query, stores):
+    def is_numeric(token):
+        try:
+            float(token)
+            return True
+        except ValueError:
+            return False
+
+    base_non_numeric = [token for token in base_tokens if not is_numeric(token)]
+    return all(token in new_tokens for token in base_non_numeric)
+
+async def run_parsers(query, stores, timeout=6):
     loop = asyncio.get_event_loop()
-    tasks = {store: loop.run_in_executor(None, func, query)
-             for store, func in stores.items()}
-    results_list = await asyncio.gather(*tasks.values(), return_exceptions=True)
-    results = {
-        store: result if not isinstance(result, Exception) else []
-        for store, result in zip(tasks.keys(), results_list)
-    }
+    tasks = {}
+    for store, func in stores.items():
+        future = loop.run_in_executor(None, func, query)
+        tasks[store] = asyncio.wait_for(future, timeout=timeout)
+    results = {}
+    for store, task in tasks.items():
+        try:
+            result = await task
+            results[store] = result
+        except asyncio.TimeoutError:
+            results[store] = []
+        except Exception as e:
+            app.logger.error("Parser error for %s: %s", store, e)
+            results[store] = []
     return results
-  
+
+# ---------------------
+# API поиска
+# ---------------------
+
 @app.route('/api/search', methods=['POST'])
 def api_search():
     data = request.get_json()
@@ -53,11 +96,10 @@ def api_search():
     if not query:
         return jsonify({"error": "Пустой запрос"}), 400
 
-    # Формируем ключ для кэша
     cache_key = f"search:{query.lower()}"
     cached_results = cache.get(cache_key)
     if cached_results is not None:
-        app.logger.debug("Найден результат в кэше для запроса: %s", query)
+        app.logger.debug("Cache hit for query: %s", query)
         session["last_query"] = query
         session["last_cache_key"] = cache_key
         return jsonify(cached_results)
@@ -66,20 +108,8 @@ def api_search():
     last_cache_key = session.get("last_cache_key")
     last_results = cache.get(last_cache_key) if last_cache_key else None
 
-    app.logger.debug("Сессия - last_query: %s", last_query)
-    if last_results:
-        app.logger.debug("Сессия - количество товаров: %s", {store: len(prod) for store, prod in last_results.items()})
-    
     if last_query and last_results and is_refinement(query, last_query):
         new_tokens = query.lower().split()
-        base_tokens = last_query.lower().split()
-        app.logger.debug("Проверка уточнения запроса:")
-        app.logger.debug("  Last query: %s", last_query)
-        app.logger.debug("  New query: %s", query)
-        app.logger.debug("  Tokens new: %s", new_tokens)
-        app.logger.debug("  Tokens base: %s", base_tokens)
-        app.logger.debug("  is_refinement: %s", is_refinement(query, last_query))
-        
         refined_results = {}
         for store, products in last_results.items():
             refined_products = []
@@ -88,29 +118,7 @@ def api_search():
                 if all(token in product_name for token in new_tokens):
                     refined_products.append(product)
             refined_results[store] = refined_products
-        
-        app.logger.debug("После фильтрации, результаты: %s", {store: len(lst) for store, lst in refined_results.items()})
-        
-        if sum(len(lst) for lst in refined_results.values()) == 0:
-            app.logger.debug("Фильтрация по уточняющему запросу дала пустой результат. Выполняем полный парсинг для запроса: %s", query)
-            stores = {
-                "gudvin": gudvin.parse_gudvin,
-                "promispb": promispb.parse_promispb,
-                "hozka": hozka.parse_hozka,
-                "artplast": artplast.parse_artplast,
-                "newpackspb": newpackspb.parse_newpackspb
-            }
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            try:
-                refined_results = loop.run_until_complete(run_parsers(query, stores))
-                app.logger.debug("Новый поиск для '%s' дал результаты: %s", query, {store: len(lst) for store, lst in refined_results.items()})
-            except Exception as e:
-                refined_results = {}
-                app.logger.error("Async parser error: %s", e)
-            finally:
-                loop.close()
-        
+
         cache.set(cache_key, refined_results)
         session["last_query"] = query
         session["last_cache_key"] = cache_key
@@ -123,12 +131,12 @@ def api_search():
         "artplast": artplast.parse_artplast,
         "newpackspb": newpackspb.parse_newpackspb
     }
-    
+
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
     try:
-        results = loop.run_until_complete(run_parsers(query, stores))
-        app.logger.debug("Результаты нового парсинга получены.")
+        results = loop.run_until_complete(run_parsers(query, stores, timeout=6))
+        app.logger.debug("Parsed results obtained.")
     except Exception as e:
         results = {}
         app.logger.error("Async parser error: %s", e)
@@ -138,8 +146,52 @@ def api_search():
     cache.set(cache_key, results)
     session["last_query"] = query
     session["last_cache_key"] = cache_key
-    app.logger.debug("Сохранены результаты нового парсинга в кэш и обновлены данные сессии для запроса: %s", query)
     return jsonify(results)
+
+@app.route('/api/search/update', methods=['POST'])
+def api_search_update():
+    data = request.get_json()
+    query = data.get("query", "").strip()
+    if not query:
+        return jsonify({"error": "Пустой запрос"}), 400
+
+    cache_key = f"search:{query.lower()}"
+    current_results = cache.get(cache_key) or {}
+    stores_to_update = {}
+    for store, items in current_results.items():
+        if not items:
+            stores_to_update[store] = {"func": None}
+
+    if not stores_to_update:
+        return jsonify(current_results)
+
+    full_stores = {
+        "gudvin": gudvin.parse_gudvin,
+        "promispb": promispb.parse_promispb,
+        "hozka": hozka.parse_hozka,
+        "artplast": artplast.parse_artplast,
+        "newpackspb": newpackspb.parse_newpackspb
+    }
+    stores = {store: full_stores[store] for store in stores_to_update.keys()}
+
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        updated_results = loop.run_until_complete(run_parsers(query, stores, timeout=20))
+        for store, items in updated_results.items():
+            if items:
+                current_results[store] = items
+        cache.set(cache_key, current_results)
+    except Exception as e:
+        app.logger.error("Update parser error: %s", e)
+    finally:
+        loop.close()
+
+    return jsonify(current_results)
+
+# ---------------------
+# Кэшированное изображение
+# ---------------------
 
 @app.route('/cached_image')
 def cached_image():
@@ -156,6 +208,10 @@ def cached_image():
         return Response(image_bytes, mimetype="image/png")
     else:
         return "Ошибка загрузки изображения", 500
+
+# ---------------------
+# API для работы с корзиной
+# ---------------------
 
 @app.route('/api/cart', methods=['GET'])
 def get_cart():
@@ -242,13 +298,26 @@ def cart_checkout():
     session["cart"] = []
     return jsonify({"message": "Заказ оформлен, спасибо!", "cart": []})
 
-# Новый маршрут для очистки всей корзины
 @app.route('/api/cart/clear_all', methods=['POST'])
 def clear_cart_all():
     session["cart"] = []
     return jsonify({"message": "Вся корзина очищена", "cart": []})
 
-# Новый маршрут для очистки корзины в конкретной группе
+@app.route('/profile', methods=['GET', 'POST'])
+def profile():
+    if request.method == 'POST':
+        # Логика обработки сохранения данных профиля
+        return redirect(url_for('profile'))
+    return render_template('profile.html', user=current_user)
+
+
+@app.route('/change_password', methods=['POST'])
+def change_password():
+    # Здесь логика смены пароля
+    return redirect(url_for('profile'))
+
+
+
 @app.route('/api/cart/clear_group', methods=['POST'])
 def clear_cart_group():
     data = request.get_json()
@@ -260,5 +329,57 @@ def clear_cart_group():
     session["cart"] = new_cart
     return jsonify({"message": f"Корзина для поставщика {supplier} очищена", "cart": new_cart})
 
+# ---------------------
+# Маршруты аутентификации (регистрация, логин, выход)
+# ---------------------
+
+@app.route('/register', methods=['GET', 'POST'])
+def register():
+    if request.method == 'POST':
+        username = request.form.get('username').strip()
+        email = request.form.get('email').strip()
+        password = request.form.get('password')
+        confirm_password = request.form.get('confirm_password')
+
+        if not all([username, email, password, confirm_password]):
+            return render_template('register.html', error="Все поля обязательны.")
+        if password != confirm_password:
+            return render_template('register.html', error="Пароли не совпадают.")
+        if User.query.filter((User.username == username) | (User.email == email)).first():
+            return render_template('register.html', error="Пользователь с таким именем или email уже существует.")
+        
+        new_user = User(username=username, email=email)
+        new_user.set_password(password)
+        db.session.add(new_user)
+        db.session.commit()
+        login_user(new_user)
+        return redirect(url_for('index'))
+    return render_template('register.html')
+
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        username_or_email = request.form.get('username_or_email').strip()
+        password = request.form.get('password')
+        if not username_or_email or not password:
+            return render_template('login.html', error="Пожалуйста, заполните все поля.")
+        user = User.query.filter((User.username == username_or_email) | (User.email == username_or_email)).first()
+        if not user or not user.check_password(password):
+            return render_template('login.html', error="Неправильное имя пользователя или пароль.")
+        login_user(user)
+        return redirect(url_for('index'))
+    return render_template('login.html')
+
+@app.route('/logout')
+@login_required
+def logout():
+    logout_user()
+    return redirect(url_for('index'))
+
+# ---------------------
+# Запуск приложения
+# ---------------------
 if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()  # Создаем таблицы в базе данных, если их ещё нет
     app.run(debug=True)

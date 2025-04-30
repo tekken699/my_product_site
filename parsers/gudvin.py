@@ -1,16 +1,12 @@
 # gudvin_parser.py
-
 import logging
-import time
 import re
 from urllib.parse import quote, urljoin
 from bs4 import BeautifulSoup
-from selenium.webdriver.common.by import By 
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-
-from driver_utils import get_driver
+from driver_pool import driver_pool
 from common_regex import DECIMAL_REGEX, INTEGER_REGEX, PACK_REGEX_GUDVIN
+from timer_utils import timer
+from page_loader import load_page
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -19,26 +15,27 @@ def parse_gudvin(query: str):
     encoded_query = quote(query)
     url = f"https://gudvin-group.ru/?search={encoded_query}&s=1"
     logger.info("[GUDVIN DEBUG] Request URL: %s", url)
-    
-    driver = get_driver()
+
+    with timer("Gudvin: Driver acquisition"):
+        driver = driver_pool.acquire_driver(timeout=10)
+
     try:
-        driver.get(url)
-        WebDriverWait(driver, 15).until(
-            EC.presence_of_all_elements_located((By.CSS_SELECTOR, ".product-card, .product-item, .product-snippet"))
-        )
-        time.sleep(0.3)
-        page_source = driver.page_source
+        with timer("Gudvin: Page loading and waiting"):
+            page_source = load_page(driver, url, ".product-card, .product-item, .product-snippet",
+                                    wait_time=15, sleep_after=0.3, attempts=3)
     except Exception as e:
         logger.error("[GUDVIN DEBUG] Ошибка при загрузке страницы: %s", e)
         page_source = ""
     finally:
-        driver.quit()
-    
-    soup = BeautifulSoup(page_source, "html.parser")
-    product_elems = soup.find_all("div", class_="product-card")
-    if not product_elems:
-        product_elems = soup.select("div.product-item, div.product-snippet")
-        logger.info("[GUDVIN DEBUG] Использую альтернативный селектор, найдено %d элементов", len(product_elems))
+        driver.delete_all_cookies()
+        driver_pool.release_driver(driver)
+
+    with timer("Gudvin: DOM parsing"):
+        soup = BeautifulSoup(page_source, "html.parser")
+        product_elems = soup.find_all("div", class_="product-card")
+        if not product_elems:
+            product_elems = soup.select("div.product-item, div.product-snippet")
+            logger.info("[GUDVIN DEBUG] Использую альтернативный селектор, найдено %d элементов", len(product_elems))
     
     products = []
     for elem in product_elems:
@@ -48,8 +45,6 @@ def parse_gudvin(query: str):
             if not title:
                 img_elem = elem.find("img", alt=True)
                 title = img_elem["alt"].strip() if img_elem and img_elem.has_attr("alt") else "Без названия"
-    
-            # Извлечение упаковочных данных
             step = 1
             quantity_elem = elem.find("span", class_="product-snippet-data-quantity")
             if quantity_elem:
@@ -58,8 +53,6 @@ def parse_gudvin(query: str):
                 if m:
                     step = int(m.group(1))
             quantity = step
-    
-            # Извлечение цены
             price_value = 0.0
             price_elem = elem.find("span", class_="price-value")
             if not price_elem:
@@ -84,12 +77,10 @@ def parse_gudvin(query: str):
                 price_text = price_elem.get_text(strip=True)
                 numbers = DECIMAL_REGEX.findall(price_text)
                 price_value = float(numbers[0]) if numbers else 0.0
-    
             link_elem = elem.find("a", href=True)
             if not link_elem:
                 continue
             link = urljoin("https://gudvin-group.ru/", link_elem["href"])
-    
             img_url = None
             img_container = elem.find("div", class_="product-snippet-img")
             if img_container:
@@ -100,7 +91,6 @@ def parse_gudvin(query: str):
                 img_tag = elem.find("img")
                 if img_tag and img_tag.has_attr("src"):
                     img_url = img_tag["src"]
-    
             availability = "Неизвестно"
             avail_link = elem.find("link", itemprop="availability")
             if avail_link and avail_link.has_attr("href"):
@@ -123,7 +113,6 @@ def parse_gudvin(query: str):
                         availability = "Под заказ"
                     else:
                         availability = text_status.capitalize()
-    
             products.append({
                 "name": title,
                 "price": price_value,
@@ -136,5 +125,4 @@ def parse_gudvin(query: str):
             })
         except Exception as e:
             logger.error("Ошибка при парсинге товара Gudvin: %s", e)
-    
     return products

@@ -3,16 +3,30 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Сравнение товаров</title>
+    <title>Intrig</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
   </head>
   <body>
     <header>
-      <h1>Сравнение товаров</h1>
+      <h1>Intrig</h1>
+      <!-- Блок для отображения ссылок аутентификации -->
+      <div class="user-links">
+        {% if current_user.is_authenticated %}
+          <span>Привет, {{ current_user.username }}</span>
+          <a href="{{ url_for('profile') }}">Профиль</a>
+          <a href="{{ url_for('logout') }}" class="logout-btn">Выйти</a>
+        {% else %}
+          <a href="{{ url_for('login') }}" class="login-btn">Войти</a>
+          <a href="{{ url_for('register') }}" class="register-btn">Регистрация</a>
+        {% endif %}
+      </div>
+      
       <form id="search-form">
         <input type="text" id="search-input" placeholder="Введите поисковый запрос" />
         <button type="submit">Найти</button>
       </form>
+      <!-- Кнопка для перехода в корзину -->
+      <a href="{{ url_for('cart') }}" class="cart-link-btn">Корзина</a>
     </header>
     
     <!-- Фильтры -->
@@ -26,24 +40,16 @@
         <option value="default">По умолчанию</option>
         <option value="priceAsc">Цена: по возрастанию</option>
         <option value="priceDesc">Цена: по убыванию</option>
+        <option value="availableOnly">В наличии</option>
       </select>
       <button id="apply-filters">Применить</button>
     </section>
     
-    <!-- Общее содержимое: результаты и корзина -->
+    <!-- Контейнер результатов -->
     <div id="main-content">
-      <!-- Контейнер результатов – сюда скриптом добавляются блоки с товарами для каждого магазина -->
       <section id="results"></section>
-      <!-- Боковая колонка для корзины -->
-      <aside id="cart-container">
-        <h2>Корзина</h2>
-        <div id="cart">
-          <!-- Здесь отображается содержимое корзины -->
-        </div>
-        <button id="checkout-btn">Оформить заказ</button>
-      </aside>
     </div>
-
+    
     <script src="{{ url_for('static', filename='js/cart.js') }}"></script>
     <script src="{{ url_for('static', filename='js/main.js') }}"></script>
   </body>

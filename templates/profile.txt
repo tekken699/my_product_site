@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Профиль пользователя</title>
+    <!-- Подключаем общий стиль профиля -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/profile.css') }}" />
+  </head>
+  <body>
+    <header>
+      <h1>Профиль пользователя</h1>
+      <nav>
+        <a href="{{ url_for('index') }}">На главную</a>
+        <a href="{{ url_for('logout') }}">Выход</a>
+      </nav>
+    </header>
+    <main>
+      <!-- Форма для редактирования данных профиля -->
+      <form id="profile-form" method="POST" action="{{ url_for('profile) }}">
+        <fieldset>
+          <legend>Основная информация</legend>
+          <label for="fio">ФИО:</label>
+          <input type="text" id="fio" name="fio" value="{{ user.fio }}" required />
+
+          <label for="phone">Телефон:</label>
+          <input type="tel" id="phone" name="phone" value="{{ user.phone }}" required />
+
+          <label for="address">Адрес:</label>
+          <input type="text" id="address" name="address" value="{{ user.address }}" required />
+
+          <label for="ip">ИП:</label>
+          <input type="text" id="ip" name="ip" value="{{ user.ip }}" />
+
+          <label for="inn">ИНН:</label>
+          <input type="text" id="inn" name="inn" value="{{ user.inn }}" />
+        </fieldset>
+        <button type="submit">Сохранить изменения</button>
+      </form>
+
+      <!-- Форма для смены пароля -->
+      <form id="password-form" method="POST" action="{{ url_for('change_password') }}">
+        <fieldset>
+          <legend>Смена пароля</legend>
+          <label for="current-password">Текущий пароль:</label>
+          <input type="password" id="current-password" name="current_password" required />
+
+          <label for="new-password">Новый пароль:</label>
+          <input type="password" id="new-password" name="new_password" required />
+
+          <label for="confirm-password">Подтвердите новый пароль:</label>
+          <input type="password" id="confirm-password" name="confirm_password" required />
+        </fieldset>
+        <button type="submit">Изменить пароль</button>
+      </form>
+    </main>
+    <footer>
+      <p>&copy; 2025 MyApp</p>
+    </footer>
+    <script src="{{ url_for('static', filename='js/profile.js') }}"></script>
+  </body>
+</html>

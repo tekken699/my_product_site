@@ -1,0 +1,174 @@
+/* Базовые стили */
+body {
+  background-color: #f5f5f7;
+  font-family: 'Merriweather', serif;
+  margin: 0;
+  padding: 0;
+  color: #333;
+}
+
+header {
+  background-color: #fff;
+  padding: 20px;
+  border-bottom: 1px solid #e0e0e0;
+  text-align: center;
+}
+
+header h1 {
+  font-size: 40px;
+  margin: 0;
+  color: #222;
+}
+
+/* Стили для навигационных кнопок */
+.nav-btn {
+  display: inline-block;
+  background-color: #222;
+  color: #fff;
+  padding: 8px 16px;
+  margin: 10px 15px;
+  text-decoration: none;
+  border-radius: 4px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  transition: background-color 0.2s ease;
+}
+
+.nav-btn:hover {
+  background-color: #444;
+}
+
+/* Основной контейнер профиля */
+main#profile-main {
+  max-width: 800px;
+  margin: 40px auto;
+  padding: 25px;
+  background-color: #fff;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.05);
+}
+
+main h2 {
+  font-size: 24px;
+  color: #222;
+  margin-bottom: 20px;
+}
+
+/* Форма и fieldset */
+form {
+  margin-bottom: 30px;
+}
+
+fieldset {
+  border: none;
+  margin: 0;
+  padding: 0;
+  margin-bottom: 20px;
+}
+
+legend {
+  font-size: 20px;
+  font-weight: bold;
+  margin-bottom: 15px;
+  color: #222;
+  border-bottom: 1px solid #e0e0e0;
+  padding-bottom: 5px;
+}
+
+/* Карточки данных пользователя */
+.data-card {
+  background-color: #fafafa;
+  border: 1px solid #ddd;
+  border-radius: 6px;
+  padding: 10px 15px;
+  margin-bottom: 15px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+}
+
+.data-card label {
+  font-weight: bold;
+  margin-bottom: 5px;
+  display: block;
+  font-size: 14px;
+}
+
+.field-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.field-value {
+  flex: 1;
+  font-size: 14px;
+  padding: 8px;
+  border: 1px solid transparent;
+}
+
+.edit-input {
+  flex: 1;
+  font-size: 14px;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  display: none;
+}
+
+.edit-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #888;
+  font-size: 16px;
+  transition: color 0.2s;
+}
+
+.edit-btn:hover {
+  color: #555;
+}
+
+/* Секция смены пароля */
+.password-section {
+  margin-top: 40px;
+}
+
+.password-section h3 {
+  font-size: 20px;
+  color: #222;
+  margin-bottom: 15px;
+}
+
+/* Кнопки форм */
+button {
+  background-color: #222;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  padding: 10px 20px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  font-family: 'Merriweather', serif;
+}
+
+button.save-profile-btn,
+button.change-password-btn {
+  font-family: 'Merriweather', serif;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+}
+
+button:hover {
+  background-color: #444;
+}
+
+footer {
+  text-align: center;
+  padding: 10px;
+  border-top: 1px solid #e0e0e0;
+  font-size: 12px;
+  color: #777;
+  margin-top: 40px;
+}

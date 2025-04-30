@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Intrig - Все данные пользователей</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+  <style>
+    /* Простой стиль для вывода всех данных пользователей */
+    body {
+      font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+      background-color: #f5f5f7;
+      margin: 0;
+      padding: 20px;
+      color: #333;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    .nav-btn {
+      display: inline-block;
+      background-color: #222;
+      color: #fff;
+      padding: 8px 16px;
+      margin: 5px;
+      text-decoration: none;
+      border-radius: 4px;
+      font-family: 'Press Start 2P', monospace;
+      font-size: 12px;
+      letter-spacing: 0.5px;
+      transition: background-color 0.2s ease;
+    }
+    .nav-btn:hover {
+      background-color: #444;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background: #fff;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+      margin: 0 auto;
+    }
+    th, td {
+      padding: 12px 15px;
+      text-align: left;
+      border-bottom: 1px solid #ddd;
+      font-size: 14px;
+    }
+    th {
+      background-color: #f0f0f0;
+      font-weight: bold;
+    }
+    tr:hover {
+      background-color: #f9f9f9;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Все данные пользователей</h1>
+    <nav>
+      <a href="{{ url_for('index') }}" class="nav-btn">На главную</a>
+      <a href="{{ url_for('logout') }}" class="nav-btn">Выйти</a>
+    </nav>
+  </header>
+  <main>
+    <table>
+      <thead>
+        <tr>
+          <th>ID</th>
+          <th>Имя пользователя</th>
+          <th>Email</th>
+          <th>ФИО</th>
+          <th>Телефон</th>
+          <th>Адрес</th>
+          <th>ИП</th>
+          <th>ИНН</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for user in users %}
+          <tr>
+            <td>{{ user.id }}</td>
+            <td>{{ user.username }}</td>
+            <td>{{ user.email }}</td>
+            <td>{{ user.fio }}</td>
+            <td>{{ user.phone }}</td>
+            <td>{{ user.address }}</td>
+            <td>{{ user.ip }}</td>
+            <td>{{ user.inn }}</td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </main>
+</body>
+</html>
