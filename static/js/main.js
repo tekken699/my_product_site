@@ -39,8 +39,10 @@ async function performSearch() {
     });
     const data = await response.json();
 
-    // Сохраняем результаты глобально и сбрасываем пагинацию
+    // ВАЖНО! Присваиваем данные напрямую, так как сервер возвращает объект с товарами,
+    // например: { "gudvin group": [ ... ], "newpackspb": [ ... ] }
     globalData = data;
+    
     storePages = {};
     displayStoreProducts(minPrice, maxPrice, sortOption);
     // Запускаем опрос обновлений каждые 3 секунды
@@ -63,20 +65,22 @@ async function pollForUpdates(query, minPrice, maxPrice, sortOption) {
       body: JSON.stringify({ query: query })
     });
     const updatedData = await response.json();
-    // Если появились новые данные, обновляем глобальный результат и перерисовываем
+    // Обновляем глобальные данные, если длина массива товаров для магазина увеличилась
     let updated = false;
     for (let store in updatedData) {
-      if (!globalData[store] || globalData[store].length < updatedData[store].length) {
+      if (!globalData[store] || 
+          !globalData[store].products || 
+          globalData[store].products.length < updatedData[store].products.length) {
         globalData[store] = updatedData[store];
         updated = true;
       }
     }
     if (updated) {
       displayStoreProducts(minPrice, maxPrice, sortOption);
-      // Если все магазины уже заполнены, останавливаем опрос
       let allReady = true;
       for (let store in globalData) {
-        if (globalData[store].length === 0) allReady = false;
+        if (!globalData[store].products || globalData[store].products.length === 0)
+          allReady = false;
       }
       if (allReady) clearInterval(updateIntervalId);
     }
@@ -84,6 +88,7 @@ async function pollForUpdates(query, minPrice, maxPrice, sortOption) {
     console.error("Ошибка обновления:", error);
   }
 }
+
 
 // Функция отображения результатов по магазинам (5 карточек на страницу)
 function displayStoreProducts(minPrice, maxPrice, sortOption) {
@@ -93,10 +98,11 @@ function displayStoreProducts(minPrice, maxPrice, sortOption) {
   const itemsPerPage = 5;
 
   for (let store in globalData) {
-    if (!Array.isArray(globalData[store])) continue;
+    // Ожидаем, что globalData[store] имеет структуру { count: number, products: [...] }
+    if (!globalData[store] || !globalData[store].products) continue;
 
     // Фильтрация товаров по цене
-    let products = globalData[store].filter(item => item.price >= minPrice && item.price <= maxPrice);
+    let products = globalData[store].products.filter(item => item.price >= minPrice && item.price <= maxPrice);
 
     if (sortOption === "availableOnly") {
       products = products.filter(item => {
@@ -113,17 +119,16 @@ function displayStoreProducts(minPrice, maxPrice, sortOption) {
     const storeBlock = document.createElement("div");
     storeBlock.classList.add("store-block");
 
-    // Заголовок магазина
+    // Заголовок магазина с названием и количеством товаров
     const storeHeading = document.createElement("h2");
     storeHeading.classList.add("store-heading");
-    storeHeading.textContent = getStoreName(store);
+    storeHeading.textContent = `${getStoreName(store)} (${globalData[store].count} товаров)`;
     storeBlock.appendChild(storeHeading);
 
     // Контейнер для карточек товаров (сетка)
     const productGrid = document.createElement("div");
     productGrid.classList.add("product-grid");
 
-    // Если для магазина данных нет, показываем локальный спиннер с Pixel Loader
     if (products.length === 0) {
       const spinner = document.createElement("div");
       spinner.innerHTML = `
@@ -155,7 +160,7 @@ function displayStoreProducts(minPrice, maxPrice, sortOption) {
     }
     storeBlock.appendChild(productGrid);
 
-    // Блок навигации: кнопки "Вперед" и "Назад"
+    // Навигация (кнопки "Вперед" и "Назад")
     const navContainer = document.createElement("div");
     navContainer.classList.add("store-nav");
 
@@ -187,6 +192,7 @@ function displayStoreProducts(minPrice, maxPrice, sortOption) {
     resultsContainer.innerHTML = "<p>Товары не найдены.</p>";
   }
 }
+
 
 // Функция создания карточки товара с быстрыми кнопками для изменения количества
 function createProductCard(product) {
@@ -300,7 +306,6 @@ function createProductCard(product) {
   content.appendChild(quickControls);
   card.appendChild(content);
 
-  // Обработчики dblclick для перехода на сайт поставщика находятся только на изображении и заголовке
   return card;
 }
 
@@ -314,7 +319,7 @@ function getStoreName(storeKey) {
     "newpackspb": "NewPacksPB",
     "promindus": "Promindus"
   };
-  return mapping[storeKey] || (storeKey.charAt(0).toUpperCase() + storeKey.slice(1));
+  return mapping[storeKey.toLowerCase()] || (storeKey.charAt(0).toUpperCase() + storeKey.slice(1));
 }
 
 // Обработчики событий

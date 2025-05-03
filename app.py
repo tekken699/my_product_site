@@ -1,16 +1,19 @@
 import asyncio
 import logging
+import datetime
+import atexit
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for, Response, abort
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
-from models import db, User  # models.py должен содержать определение модели User
+from models import db, User, Product  # Модель Product должна содержать поле search_query и поле site (для магазина)
 from parsers import gudvin, promispb, hozka, artplast, newpackspb
 from services.image_cache import async_get_cached_image
 from flask_caching import Cache
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///myapp.db'
+# Абсолютный путь к базе данных
+app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///C:/Users/user/source/repos/my_product_site.ver_1.5/myapp.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
 
@@ -35,10 +38,23 @@ app.logger.debug("Logging is setup correctly.")
 def load_user(user_id):
     return User.query.get(int(user_id))
 
+# Перед первым запросом заполняем поле search_query для товаров, если оно пустое или NULL
+@app.before_first_request
+def populate_search_query():
+    products = Product.query.all()
+    updated = False
+    for product in products:
+        if not product.search_query:
+            product.search_query = product.name.lower()
+            db.session.add(product)
+            updated = True
+    if updated:
+        db.session.commit()
+        app.logger.info("Updated search_query for existing records.")
+
 # ---------------------
 # Основные маршруты
 # ---------------------
-
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -50,7 +66,6 @@ def cart():
 # ---------------------
 # Вспомогательные функции для API поиска
 # ---------------------
-
 def is_refinement(new_query, base_query):
     new_tokens = new_query.lower().split()
     base_tokens = base_query.lower().split()
@@ -88,7 +103,6 @@ async def run_parsers(query, stores, timeout=6):
 # ---------------------
 # API поиска
 # ---------------------
-
 @app.route('/api/search', methods=['POST'])
 def api_search():
     data = request.get_json()
@@ -96,7 +110,9 @@ def api_search():
     if not query:
         return jsonify({"error": "Пустой запрос"}), 400
 
-    cache_key = f"search:{query.lower()}"
+    # Приводим входной запрос к нижнему регистру для корректного сравнения
+    q_lower = query.lower()
+    cache_key = f"search:{q_lower}"
     cached_results = cache.get(cache_key)
     if cached_results is not None:
         app.logger.debug("Cache hit for query: %s", query)
@@ -104,49 +120,37 @@ def api_search():
         session["last_cache_key"] = cache_key
         return jsonify(cached_results)
 
-    last_query = session.get("last_query")
-    last_cache_key = session.get("last_cache_key")
-    last_results = cache.get(last_cache_key) if last_cache_key else None
+    # Поиск товаров по полям name и search_query с использованием ilike
+    products = Product.query.filter(
+        (Product.name.ilike(f"%{q_lower}%")) |
+        (Product.search_query.ilike(f"%{q_lower}%"))
+    ).all()
 
-    if last_query and last_results and is_refinement(query, last_query):
-        new_tokens = query.lower().split()
-        refined_results = {}
-        for store, products in last_results.items():
-            refined_products = []
-            for product in products:
-                product_name = product.get("name", "").lower()
-                if all(token in product_name for token in new_tokens):
-                    refined_products.append(product)
-            refined_results[store] = refined_products
+    # Группировка товаров по магазину. Результат – объект, где для каждого магазина указаны
+    # количество найденных товаров и список товаров.
+    results_grouped = {}
+    for prod in products:
+        store = prod.site if prod.site else "неизвестный поставщик"
+        if store not in results_grouped:
+            results_grouped[store] = {"count": 0, "products": []}
+        results_grouped[store]["products"].append({
+            "id": prod.id,
+            "name": prod.name,
+            "price": prod.price,
+            "price_display": prod.price_display,
+            "link": prod.link,
+            "img_url": prod.img_url,
+            "quantity": prod.quantity,
+            "step": prod.step,
+            "availability": prod.availability,
+        })
+        results_grouped[store]["count"] = len(results_grouped[store]["products"])
+    final_results = results_grouped
 
-        cache.set(cache_key, refined_results)
-        session["last_query"] = query
-        session["last_cache_key"] = cache_key
-        return jsonify(refined_results)
-
-    stores = {
-        "gudvin": gudvin.parse_gudvin,
-        "promispb": promispb.parse_promispb,
-        "hozka": hozka.parse_hozka,
-        "artplast": artplast.parse_artplast,
-        "newpackspb": newpackspb.parse_newpackspb
-    }
-
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        results = loop.run_until_complete(run_parsers(query, stores, timeout=6))
-        app.logger.debug("Parsed results obtained.")
-    except Exception as e:
-        results = {}
-        app.logger.error("Async parser error: %s", e)
-    finally:
-        loop.close()
-
-    cache.set(cache_key, results)
+    cache.set(cache_key, final_results)
     session["last_query"] = query
     session["last_cache_key"] = cache_key
-    return jsonify(results)
+    return jsonify(final_results)
 
 @app.route('/api/search/update', methods=['POST'])
 def api_search_update():
@@ -186,13 +190,11 @@ def api_search_update():
         app.logger.error("Update parser error: %s", e)
     finally:
         loop.close()
-
     return jsonify(current_results)
 
 # ---------------------
 # Кэшированное изображение
 # ---------------------
-
 @app.route('/cached_image')
 def cached_image():
     image_url = request.args.get("url")
@@ -212,7 +214,6 @@ def cached_image():
 # ---------------------
 # API для работы с корзиной
 # ---------------------
-
 @app.route('/api/cart', methods=['GET'])
 def get_cart():
     cart = session.get("cart", [])
@@ -303,43 +304,6 @@ def clear_cart_all():
     session["cart"] = []
     return jsonify({"message": "Вся корзина очищена", "cart": []})
 
-@app.route('/profile', methods=['GET', 'POST'])
-@login_required
-def profile():
-    if request.method == 'POST':
-        # Обновляем данные пользователя напрямую
-        # Предполагается, что поля fio, phone, address, ip, inn существуют в модели User
-        current_user.fio = request.form.get('fio', current_user.fio)
-        current_user.phone = request.form.get('phone', current_user.phone)
-        current_user.address = request.form.get('address', current_user.address)
-        current_user.ip = request.form.get('ip', current_user.ip)
-        current_user.inn = request.form.get('inn', current_user.inn)
-        
-        db.session.commit()
-        # Перенаправляем на GET-версию профиля, чтобы обновленные данные загрузились
-        return redirect(url_for('profile'))
-    else:
-        # Создаем словарь с данными для шаблона
-        profile_data = {
-            'fio': current_user.fio or current_user.username,
-            'phone': current_user.phone or '',
-            'address': current_user.address or '',
-            'ip': current_user.ip or '',
-            'inn': current_user.inn or ''
-        }
-        return render_template('profile.html', user=profile_data)
-
-
-
-
-
-@app.route('/change_password', methods=['POST'])
-def change_password():
-    # Здесь логика смены пароля
-    return redirect(url_for('profile'))
-
-
-
 @app.route('/api/cart/clear_group', methods=['POST'])
 def clear_cart_group():
     data = request.get_json()
@@ -354,7 +318,6 @@ def clear_cart_group():
 # ---------------------
 # Маршруты аутентификации (регистрация, логин, выход)
 # ---------------------
-
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
@@ -362,14 +325,12 @@ def register():
         email = request.form.get('email').strip()
         password = request.form.get('password')
         confirm_password = request.form.get('confirm_password')
-
         if not all([username, email, password, confirm_password]):
             return render_template('register.html', error="Все поля обязательны.")
         if password != confirm_password:
             return render_template('register.html', error="Пароли не совпадают.")
         if User.query.filter((User.username == username) | (User.email == email)).first():
             return render_template('register.html', error="Пользователь с таким именем или email уже существует.")
-        
         new_user = User(username=username, email=email)
         new_user.set_password(password)
         db.session.add(new_user)
@@ -397,23 +358,164 @@ def login():
 def logout():
     logout_user()
     return redirect(url_for('index'))
-    
 
 @app.route('/users')
 @login_required
 def users():
-    # Проверяем, является ли текущий пользователь администратором.
     if not getattr(current_user, 'intrig', False):
-        abort(403)  # Если нет – возвращаем статус Forbidden (403)
+        abort(403)
     all_users = User.query.all()
     return render_template('users.html', users=all_users)
 
+# ---------------------
+# Фоновый парсер и планировщик
+# ---------------------
+def background_parser_job():
+    """
+    Фоновый парсер обходит предопределённые запросы и для каждого магазина:
+      - Для каждого запроса распределяет до 3 попыток загрузить страницу с парсингом.
+      - Если товар уже есть (по уникальному полю link), обновляет цену (если цена или доступность изменились)
+        и дату последнего обновления.
+      - Если товара нет, создаёт новую запись.
+      - Если значение price отсутствует, устанавливается как 0, что означает "цена по запросу".
+    """
+    from sqlalchemy.exc import IntegrityError
+    stores = {
+        "gudvin": gudvin.parse_gudvin,
+        "promispb": promispb.parse_promispb,
+        "hozka": hozka.parse_hozka,
+        "artplast": artplast.parse_artplast,
+        "newpackspb": newpackspb.parse_newpackspb
+    }
+    PREDEFINED_QUERIES = [
+        "стакан",
+        "крышка",
+        "крышка для стакана",
+        "пакет",
+        "пакеты фасовочные",
+        "Контейнер",
+        "Крышка для контейнера",
+        "Коробка под пирожное",
+        "Пакет-майка",
+        "Лента",
+        "Наклейка",
+        "Средство",
+        "Химия",
+        "Средство для очистки молочных систем",
+        "Средство для кофемашины",
+        "Кольца кодировочные",
+        "Тарталетка",
+        "Уголок",
+        "Уголоки",
+        "Держатель для стаканов",
+        "Размешиватель",
+        "Трубочки",
+        "Вилка",
+        "Вилки",
+        "Ложка",
+        "Ложки",
+        "Нож",
+        "Ножи",
+        "Соусник",
+        "Бумага для выпечки",
+        "Пергамент",
+        "Мешок кондитерский",
+        "Бахилы",
+        "Одноразовые шапочки",
+        "Салфетки",
+        "Тряпка",
+        "Щетка",
+        "Губка",
+        "Мешок для мусора",
+        "Мешки для мусора",
+        "Пакет мусорный",
+        "Чековая лента",
+        "Этикет лента",
+        "Перчатки",
+        "Туалетная бумага",
+        "освежитель воздуха",
+        "Полотенце",
+        "Зубочистки",
+        "Тарелка",
+        "Антисептик",
+        "Сахар",
+        "Сахар порц",
+        "Соль",
+        "Соль порц",
+        "Перец",
+        "Перец порц"
+    ]
+    for query in PREDEFINED_QUERIES:
+        for store_name, parser_func in stores.items():
+            attempts = 0
+            products_list = []
+            success = False
+            while attempts < 3 and not success:
+                try:
+                    attempts += 1
+                    products_list = parser_func(query)
+                    success = True
+                except Exception as e:
+                    app.logger.error(f"Attempt {attempts}/3: Error loading {parser_func.__name__} for query '{query}': {e}")
+                    if attempts < 3:
+                        import time
+                        time.sleep(1)
+            app.logger.info(f"[{datetime.datetime.utcnow().isoformat()}] Обработал запрос '{query}' для магазина {store_name}, найдено товаров: {len(products_list)}")
+            try:
+                for prod in products_list:
+                    # Если поле price отсутствует, устанавливаем 0 ("цена по запросу")
+                    price = prod.get("price")
+                    if price is None:
+                        price = 0
+                    with db.session.no_autoflush:
+                        existing = Product.query.filter_by(link=prod["link"]).first()
+                        if existing:
+                            if existing.price != price or existing.availability != prod["availability"]:
+                                existing.price = price
+                                existing.price_display = prod.get("price_display", str(price))
+                                existing.availability = prod["availability"]
+                                existing.last_updated = datetime.datetime.utcnow()
+                                db.session.add(existing)
+                        else:
+                            new_product = Product(
+                                name=prod["name"],
+                                search_query=prod["name"].lower(),
+                                price=price,
+                                price_display=prod.get("price_display", str(price)),
+                                site=prod.get("site"),
+                                link=prod["link"],
+                                img_url=prod.get("img_url", ""),
+                                quantity=prod.get("quantity", 1),
+                                step=prod.get("step", 1),
+                                availability=prod["availability"],
+                                last_updated=datetime.datetime.utcnow()
+                            )
+                            db.session.add(new_product)
+                db.session.commit()
+            except IntegrityError as ie:
+                app.logger.error(f"IntegrityError в запросе '{query}', магазин {store_name}: {ie}")
+                db.session.rollback()
+            except Exception as e:
+                app.logger.error(f"Ошибка обработки данных для запроса '{query}', магазин {store_name}: {e}")
+                db.session.rollback()
 
+def start_scheduler(app):
+    from apscheduler.schedulers.background import BackgroundScheduler
+    scheduler = BackgroundScheduler()
+    # Оборачиваем вызов фонового парсера в контекст приложения
+    scheduler.add_job(func=lambda: (app.app_context().push(), background_parser_job()),
+                      trigger='interval',
+                      hours=3,
+                      next_run_time=datetime.datetime.utcnow())
+    scheduler.start()
+    app.logger.info("APScheduler запущен")
+    atexit.register(lambda: scheduler.shutdown())
 
 # ---------------------
 # Запуск приложения
 # ---------------------
 if __name__ == '__main__':
     with app.app_context():
-        db.create_all()  # Создаем таблицы в базе данных, если их ещё нет
+        db.create_all()  # Создаем таблицы, если требуется
+        start_scheduler(app)  # Запускаем планировщик, передавая объект приложения
     app.run(debug=True)

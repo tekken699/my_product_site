@@ -39,8 +39,10 @@ async function performSearch() {
     });
     const data = await response.json();
 
-    // Сохраняем результаты глобально и сбрасываем пагинацию
+    // ВАЖНО! Присваиваем данные напрямую, так как сервер возвращает объект с товарами,
+    // например: { "gudvin group": [ ... ], "newpackspb": [ ... ] }
     globalData = data;
+    
     storePages = {};
     displayStoreProducts(minPrice, maxPrice, sortOption);
     // Запускаем опрос обновлений каждые 3 секунды
@@ -300,11 +302,8 @@ function createProductCard(product) {
   content.appendChild(quickControls);
   card.appendChild(content);
 
-  // Обработчики dblclick для перехода на сайт поставщика находятся только на изображении и заголовке
   return card;
 }
-
-
 
 // Функция для преобразования ключа магазина в читаемое имя
 function getStoreName(storeKey) {
@@ -316,7 +315,7 @@ function getStoreName(storeKey) {
     "newpackspb": "NewPacksPB",
     "promindus": "Promindus"
   };
-  return mapping[storeKey] || (storeKey.charAt(0).toUpperCase() + storeKey.slice(1));
+  return mapping[storeKey.toLowerCase()] || (storeKey.charAt(0).toUpperCase() + storeKey.slice(1));
 }
 
 // Обработчики событий
