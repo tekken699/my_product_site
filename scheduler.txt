@@ -1,13 +1,12 @@
 from apscheduler.schedulers.background import BackgroundScheduler
 import atexit
-from datetime import datetime, timedelta
+from datetime import datetime
 from models import db, Product
 from parsers import gudvin, promispb, hozka, artplast, newpackspb
-from zoneinfo import ZoneInfo
+from datetime import timedelta
 
 # Список подготовленных запросов
 PREDEFINED_QUERIES = [
-    "Микрофибра",
     "стакан",
     "крышка",
     "крышка для стакана",
@@ -64,13 +63,12 @@ PREDEFINED_QUERIES = [
     "Соль порц",
     "Перец",
     "Перец порц"
-    
 ]
 
 def background_parser_job():
     """
     Фоновый парсер для предопределённых запросов:
-      - Для каждого запроса из PREDEFINED_QUERIES
+      - Для каждого запроса в PREDEFINED_QUERIES
       - Для каждого магазина из словаря stores
       - Вызывается соответствующий парсер, возвращающий список товаров
       - Для каждого товара выполняется поиск по полю link:
@@ -104,6 +102,7 @@ def background_parser_job():
                             existing.price_display = prod.get("price_display", str(prod["price"]))
                             existing.availability = prod["availability"]
                             existing.last_updated = datetime.utcnow()
+                            # Если хотите обновлять и другие поля (например, количество), можно добавить их здесь
                             db.session.add(existing)
                     else:
                         # Создаем новую запись
@@ -127,15 +126,13 @@ def background_parser_job():
 def start_scheduler(app):
     """
     Запускает планировщик, который каждые 3 часа выполняет background_parser_job.
-    Первый запуск запланирован через 3 часа от текущего времени.
     """
-    tz = ZoneInfo("UTC")
-    scheduler = BackgroundScheduler(timezone=tz)
+    scheduler = BackgroundScheduler()
     scheduler.add_job(
         func=lambda: (app.app_context().push(), background_parser_job()),
         trigger='interval',
         hours=3,
-        next_run_time=datetime.utcnow().replace(tzinfo=tz) + timedelta(hours=3)
+        next_run_time=datetime.utcnow() + timedelta(hours=3)
     )
     scheduler.start()
     app.logger.info("APScheduler запущен")

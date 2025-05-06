@@ -1,7 +1,17 @@
+import inspect
+
+if not hasattr(inspect, "getargspec"):
+    def getargspec(func):
+        full_spec = inspect.getfullargspec(func)
+        return full_spec.args, full_spec.varargs, full_spec.varkw, full_spec.defaults
+    inspect.getargspec = getargspec
+
 import asyncio
 import logging
-import datetime
+from datetime import datetime, timedelta
 import atexit
+import json  # Для логирования проблемных товаров в формате JSON
+import threading
 from flask import Flask, request, jsonify, render_template, session, redirect, url_for, Response, abort
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, login_user, logout_user, login_required, current_user
@@ -9,6 +19,12 @@ from models import db, User, Product  # Модель Product должна сод
 from parsers import gudvin, promispb, hozka, artplast, newpackspb
 from services.image_cache import async_get_cached_image
 from flask_caching import Cache
+from sqlalchemy.exc import IntegrityError
+from zoneinfo import ZoneInfo  # Для работы с timezone-aware объектами
+from apscheduler.schedulers.background import BackgroundScheduler
+from smart_search import search_products
+
+
 
 app = Flask(__name__)
 app.secret_key = 'your-secret-key'
@@ -16,6 +32,8 @@ app.secret_key = 'your-secret-key'
 app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///C:/Users/user/source/repos/my_product_site.ver_1.5/myapp.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 db.init_app(app)
+
+
 
 # Инициализация Flask-Login
 login_manager = LoginManager()
@@ -109,48 +127,12 @@ def api_search():
     query = data.get("query", "").strip()
     if not query:
         return jsonify({"error": "Пустой запрос"}), 400
+    available_only = data.get("availableOnly", False)
+    similarity_threshold = data.get("similarityThreshold", 60)
+    grouped_results = search_products(query, available_only=available_only, similarity_threshold=similarity_threshold)
+    
+    return jsonify(grouped_results)
 
-    # Приводим входной запрос к нижнему регистру для корректного сравнения
-    q_lower = query.lower()
-    cache_key = f"search:{q_lower}"
-    cached_results = cache.get(cache_key)
-    if cached_results is not None:
-        app.logger.debug("Cache hit for query: %s", query)
-        session["last_query"] = query
-        session["last_cache_key"] = cache_key
-        return jsonify(cached_results)
-
-    # Поиск товаров по полям name и search_query с использованием ilike
-    products = Product.query.filter(
-        (Product.name.ilike(f"%{q_lower}%")) |
-        (Product.search_query.ilike(f"%{q_lower}%"))
-    ).all()
-
-    # Группировка товаров по магазину. Результат – объект, где для каждого магазина указаны
-    # количество найденных товаров и список товаров.
-    results_grouped = {}
-    for prod in products:
-        store = prod.site if prod.site else "неизвестный поставщик"
-        if store not in results_grouped:
-            results_grouped[store] = {"count": 0, "products": []}
-        results_grouped[store]["products"].append({
-            "id": prod.id,
-            "name": prod.name,
-            "price": prod.price,
-            "price_display": prod.price_display,
-            "link": prod.link,
-            "img_url": prod.img_url,
-            "quantity": prod.quantity,
-            "step": prod.step,
-            "availability": prod.availability,
-        })
-        results_grouped[store]["count"] = len(results_grouped[store]["products"])
-    final_results = results_grouped
-
-    cache.set(cache_key, final_results)
-    session["last_query"] = query
-    session["last_cache_key"] = cache_key
-    return jsonify(final_results)
 
 @app.route('/api/search/update', methods=['POST'])
 def api_search_update():
@@ -352,6 +334,24 @@ def login():
         login_user(user)
         return redirect(url_for('index'))
     return render_template('login.html')
+    
+@app.route('/change_password', methods=['GET', 'POST'])
+@login_required
+def change_password():
+    if request.method == 'POST':
+        # Здесь обработка формы изменения пароля:
+        new_password = request.form.get('new_password')
+        confirm_password = request.form.get('confirm_password')
+        if not new_password or new_password != confirm_password:
+            error = "Пароли не совпадают или пустые."
+            return render_template('change_password.html', error=error)
+        # Обновляем пароль текущего пользователя:
+        current_user.set_password(new_password)
+        db.session.commit()
+        return redirect(url_for('profile'))
+    # При GET-запросе отображаем форму изменения пароля.
+    return render_template('change_password.html')
+
 
 @app.route('/logout')
 @login_required
@@ -366,20 +366,53 @@ def users():
         abort(403)
     all_users = User.query.all()
     return render_template('users.html', users=all_users)
+    
+@app.route('/profile')
+@login_required
+def profile():
+    return render_template('profile.html', user=current_user)
+
+# ---------------------
+# Маршрут для обновления товаров – доступен только администратору
+# ---------------------
+@app.route('/admin/update_products', methods=['POST'])
+@login_required
+def admin_update_products():
+    if not getattr(current_user, "is_admin", False):
+        abort(403)
+    # Запускаем фоновый парсер в отдельном потоке, чтобы не блокировать запрос
+    thread = threading.Thread(target=lambda: (app.app_context().push(), background_parser_job()))
+    thread.start()
+    return jsonify({"message": "Обновление товаров запущено."})
 
 # ---------------------
 # Фоновый парсер и планировщик
 # ---------------------
+
+# Настраиваем отдельный логгер для проблемных товаров,
+# который будет записывать данные в файл problematic_products.log в рабочей директории
+problematic_logger = logging.getLogger("problematic_products")
+problematic_logger.setLevel(logging.ERROR)
+ph = logging.FileHandler("problematic_products.log")
+ph_formatter = logging.Formatter('%(asctime)s %(levelname)s: %(message)s')
+ph.setFormatter(ph_formatter)
+problematic_logger.addHandler(ph)
+
 def background_parser_job():
     """
-    Фоновый парсер обходит предопределённые запросы и для каждого магазина:
-      - Для каждого запроса распределяет до 3 попыток загрузить страницу с парсингом.
-      - Если товар уже есть (по уникальному полю link), обновляет цену (если цена или доступность изменились)
-        и дату последнего обновления.
-      - Если товара нет, создаёт новую запись.
-      - Если значение price отсутствует, устанавливается как 0, что означает "цена по запросу".
+    Обновлённый фоновый парсер для предопределённых запросов:
+      - Для каждого запроса в PREDEFINED_QUERIES и для каждого магазина
+      - Вызывается соответствующий парсер, и для каждого товара:
+           • Ищется запись по уникальному полю link.
+           • Если запись существует, выполняется сравнение всех полей (name, search_query, price,
+             price_display, site, img_url, quantity, step, availability). При обнаружении изменений запись
+             обновляется новыми данными (включая время обновления).
+           • Если записи нет – создаётся новая.
+           • Обработка каждого товара осуществляется в отдельном вложенном блоке транзакции,
+             так что ошибка одного товара не отменяет обновление остальных.
+      - В случае появления ошибки (например, UNIQUE constraint или NOT NULL для price) данные о проблемном товаре и
+        описание ошибки логируются в файл problematic_products.log в формате JSON.
     """
-    from sqlalchemy.exc import IntegrityError
     stores = {
         "gudvin": gudvin.parse_gudvin,
         "promispb": promispb.parse_promispb,
@@ -388,14 +421,20 @@ def background_parser_job():
         "newpackspb": newpackspb.parse_newpackspb
     }
     PREDEFINED_QUERIES = [
+        "пакет фасовочный",
+        "палочки",
+        "Средство для кофейных",
+        "Мыло",
+        "Ножницы",
+        "Салфетки",
+        "Микрофибра",
         "стакан",
         "крышка",
         "крышка для стакана",
         "пакет",
-        "пакеты фасовочные",
         "Контейнер",
         "Крышка для контейнера",
-        "Коробка под пирожное",
+        "Коробка",
         "Пакет-майка",
         "Лента",
         "Наклейка",
@@ -403,13 +442,16 @@ def background_parser_job():
         "Химия",
         "Средство для очистки молочных систем",
         "Средство для кофемашины",
+        "Средство для удаления кофейных масел",
         "Кольца кодировочные",
         "Тарталетка",
         "Уголок",
-        "Уголоки",
+        "Уголки",
         "Держатель для стаканов",
         "Размешиватель",
         "Трубочки",
+        "Трубочки прямые",
+        "Трубочки с изгибом",
         "Вилка",
         "Вилки",
         "Ложка",
@@ -423,6 +465,7 @@ def background_parser_job():
         "Бахилы",
         "Одноразовые шапочки",
         "Салфетки",
+        "салфетки влажные",
         "Тряпка",
         "Щетка",
         "Губка",
@@ -443,7 +486,10 @@ def background_parser_job():
         "Соль",
         "Соль порц",
         "Перец",
-        "Перец порц"
+        "Перец порц",
+        "Корица",
+        
+        
     ]
     for query in PREDEFINED_QUERIES:
         for store_name, parser_func in stores.items():
@@ -460,37 +506,76 @@ def background_parser_job():
                     if attempts < 3:
                         import time
                         time.sleep(1)
-            app.logger.info(f"[{datetime.datetime.utcnow().isoformat()}] Обработал запрос '{query}' для магазина {store_name}, найдено товаров: {len(products_list)}")
+            app.logger.info(f"[{datetime.utcnow().isoformat()}] Обработал запрос '{query}' для магазина {store_name}, найдено товаров: {len(products_list)}")
             try:
                 for prod in products_list:
-                    # Если поле price отсутствует, устанавливаем 0 ("цена по запросу")
-                    price = prod.get("price")
-                    if price is None:
-                        price = 0
-                    with db.session.no_autoflush:
-                        existing = Product.query.filter_by(link=prod["link"]).first()
-                        if existing:
-                            if existing.price != price or existing.availability != prod["availability"]:
-                                existing.price = price
-                                existing.price_display = prod.get("price_display", str(price))
-                                existing.availability = prod["availability"]
-                                existing.last_updated = datetime.datetime.utcnow()
-                                db.session.add(existing)
-                        else:
-                            new_product = Product(
-                                name=prod["name"],
-                                search_query=prod["name"].lower(),
-                                price=price,
-                                price_display=prod.get("price_display", str(price)),
-                                site=prod.get("site"),
-                                link=prod["link"],
-                                img_url=prod.get("img_url", ""),
-                                quantity=prod.get("quantity", 1),
-                                step=prod.get("step", 1),
-                                availability=prod["availability"],
-                                last_updated=datetime.datetime.utcnow()
-                            )
-                            db.session.add(new_product)
+                    try:
+                        # Обрабатываем отдельный товар в блоке вложенной транзакции.
+                        with db.session.begin_nested():
+                            existing = Product.query.filter_by(link=prod["link"]).first()
+                            new_last_updated = datetime.utcnow()
+                            # Если price равен None, преобразуем его в 0.
+                            price = prod.get("price") if prod.get("price") is not None else 0
+                            new_data = {
+                                "name": prod["name"],
+                                "search_query": prod["name"].lower(),
+                                "price": price,
+                                "price_display": prod.get("price_display", str(price)),
+                                "site": prod.get("site"),
+                                "img_url": prod.get("img_url", ""),
+                                "quantity": prod.get("quantity", 1),
+                                "step": prod.get("step", 1),
+                                "availability": prod.get("availability", "Неизвестно"),
+                                "last_updated": new_last_updated
+                            }
+                            if existing:
+                                # Если хотя бы одно поле отличается – обновляем запись.
+                                if (existing.name != new_data["name"] or
+                                    existing.search_query != new_data["search_query"] or
+                                    existing.price != new_data["price"] or
+                                    existing.price_display != new_data["price_display"] or
+                                    existing.site != new_data["site"] or
+                                    existing.img_url != new_data["img_url"] or
+                                    existing.quantity != new_data["quantity"] or
+                                    existing.step != new_data["step"] or
+                                    existing.availability != new_data["availability"]):
+                                    existing.name = new_data["name"]
+                                    existing.search_query = new_data["search_query"]
+                                    existing.price = new_data["price"]
+                                    existing.price_display = new_data["price_display"]
+                                    existing.site = new_data["site"]
+                                    existing.img_url = new_data["img_url"]
+                                    existing.quantity = new_data["quantity"]
+                                    existing.step = new_data["step"]
+                                    existing.availability = new_data["availability"]
+                                    existing.last_updated = new_data["last_updated"]
+                            else:
+                                new_product = Product(
+                                    name=new_data["name"],
+                                    search_query=new_data["search_query"],
+                                    price=new_data["price"],
+                                    price_display=new_data["price_display"],
+                                    site=new_data["site"],
+                                    link=prod["link"],
+                                    img_url=new_data["img_url"],
+                                    quantity=new_data["quantity"],
+                                    step=new_data["step"],
+                                    availability=new_data["availability"],
+                                    last_updated=new_data["last_updated"]
+                                )
+                                db.session.add(new_product)
+                        # Завершаем вложенную транзакцию для товара
+                    except Exception as prod_e:
+                        db.session.rollback()
+                        problematic_entry = {
+                            "query": query,
+                            "store": store_name,
+                            "product_data": prod,
+                            "error": str(prod_e),
+                            "timestamp": datetime.utcnow().isoformat()
+                        }
+                        problematic_logger.error(json.dumps(problematic_entry, ensure_ascii=False))
+                        continue
                 db.session.commit()
             except IntegrityError as ie:
                 app.logger.error(f"IntegrityError в запросе '{query}', магазин {store_name}: {ie}")
@@ -500,13 +585,21 @@ def background_parser_job():
                 db.session.rollback()
 
 def start_scheduler(app):
-    from apscheduler.schedulers.background import BackgroundScheduler
-    scheduler = BackgroundScheduler()
-    # Оборачиваем вызов фонового парсера в контекст приложения
-    scheduler.add_job(func=lambda: (app.app_context().push(), background_parser_job()),
-                      trigger='interval',
-                      hours=3,
-                      next_run_time=datetime.datetime.utcnow())
+    """
+    Запускает планировщик, который каждые 3 часа выполняет background_parser_job.
+    Первый запуск запланирован через 3 часа от текущего времени.
+    """
+    # Создаем объект временной зоны UTC
+    tz = ZoneInfo("UTC")
+    # Используем timezone-aware время: текущее время в UTC плюс 3 часа
+    next_run = datetime.now(tz) + timedelta(hours=3)
+    scheduler = BackgroundScheduler(timezone=tz)
+    scheduler.add_job(
+        func=lambda: (app.app_context().push(), background_parser_job()),
+        trigger='interval',
+        hours=3,
+        next_run_time=next_run
+    )
     scheduler.start()
     app.logger.info("APScheduler запущен")
     atexit.register(lambda: scheduler.shutdown())

@@ -37,7 +37,7 @@ header h1 {
   font-size: 0.9rem;
 }
 .user-links a, .user-links span {
-  color: #333;
+  color: #ffffff;
   text-decoration: none;
   margin-left: 10px;
 }
@@ -57,34 +57,38 @@ header h1 {
   outline: none;
 }
 #search-form button {
-  padding: 10px 20px;
-  border: 1px solid #ccc;
-  border-left: none;
-  border-radius: 0 4px 4px 0;
-  background-color: #333;
+  display: inline-block;
+  background-color: #222;
   color: #fff;
-  font-size: 1rem;
-  cursor: pointer;
-  transition: background 0.2s ease;
+  padding: 8px 16px;
+  margin: 0 5px;
+  text-decoration: none;
+  border-radius: 20px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  transition: background-color 0.2s ease;
 }
 #search-form button:hover {
-  background-color: #555;
+  background-color: #444;
 }
 
 /* Кнопка для корзины (сделана черной, как и другие) */
 .cart-link-btn {
   display: inline-block;
-  margin-top: 10px;
-  padding: 10px 20px;
-  background-color: #333;
+  background-color: #222;
   color: #fff;
+  padding: 8px 16px;
+  margin: 0 5px;
   text-decoration: none;
-  border-radius: 4px;
-  font-size: 0.9rem;
-  transition: background 0.2s ease;
+  border-radius: 15px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  transition: background-color 0.2s ease;
 }
 .cart-link-btn:hover {
-  background-color: #555;
+  background-color: #444;
 }
 
 /* Секция фильтров */
@@ -141,6 +145,25 @@ header h1 {
   gap: 40px; /* Отступ между блоками магазинов */
   margin-top: 20px;
 }
+
+.nav-btn {
+  display: inline-block;
+  background-color: #222;
+  color: #fff;
+  padding: 8px 16px;
+  margin: 0 5px;
+  text-decoration: none;
+  border-radius: 4px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  transition: background-color 0.2s ease;
+}
+.nav-btn:hover {
+  background-color: #444;
+}
+
+
 
 /* Блок для каждого магазина */
 .store-block {

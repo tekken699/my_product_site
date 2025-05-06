@@ -1,45 +1,58 @@
-@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+/* Импортируем шрифт Roboto для современного и читаемого отображения */
+@import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
 
-/* Общие базовые стили */
+/* Общие стили */
 * {
   box-sizing: border-box;
 }
 html, body {
   margin: 0;
   padding: 0;
-  background-color: #f5f5f7;
-  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  background-color: #f7f8fa;  /* спокойный, светлый фон */
+  font-family: 'Roboto', sans-serif;
   color: #333;
 }
 
-/* Header */
+/* Шапка сайта */
 header {
-  background-color: #ffffff;
-  border-bottom: 1px solid #eaeaea;
+  background-color: #fff;
+  border-bottom: 1px solid #d0d0d0;
   padding: 20px;
   text-align: center;
-  position: relative;
+  position: sticky;
+  top: 0;
+  z-index: 100;
 }
 header h1 {
-  /* Минимально пиксельный шрифт для заголовка */
-  font-family: 'Press Start 2P', cursive;
   font-size: 28px;
-  font-weight: normal;
-  color: #333;
-  margin: 0 0 10px;
+  font-weight: 700;
+  color: #000;
+  margin: 0;
 }
-
-/* Блок ссылок аутентификации (Войти/Регистрация/Приветствие) */
 .user-links {
   position: absolute;
   right: 20px;
   top: 20px;
   font-size: 0.9rem;
 }
-.user-links a, .user-links span {
-  color: #ffffff;
+.nav-btn,
+button.nav-btn {
+  display: inline-block;
+  background-color: #000;
+  color: #fff;
+  padding: 8px 16px;
+  margin: 0 5px;
   text-decoration: none;
-  margin-left: 10px;
+  border: none;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+  cursor: pointer;
+}
+.nav-btn:hover,
+button.nav-btn:hover {
+  background-color: #222;
+  transform: scale(1.02);
 }
 
 /* Поисковая форма */
@@ -57,78 +70,74 @@ header h1 {
   outline: none;
 }
 #search-form button {
-  display: inline-block;
-  background-color: #222;
+  background-color: #000;
   color: #fff;
-  padding: 8px 16px;
-  margin: 0 5px;
-  text-decoration: none;
-  border-radius: 20px;
-  font-family: 'Press Start 2P', monospace;
-  font-size: 12px;
-  letter-spacing: 0.5px;
-  transition: background-color 0.2s ease;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 0 4px 4px 0;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.2s ease;
 }
 #search-form button:hover {
-  background-color: #444;
+  background-color: #222;
+  transform: scale(1.02);
 }
 
-/* Кнопка для корзины (сделана черной, как и другие) */
+/* Кнопка Корзина */
 .cart-link-btn {
   display: inline-block;
-  background-color: #222;
+  background-color: #000;
   color: #fff;
   padding: 8px 16px;
   margin: 0 5px;
   text-decoration: none;
-  border-radius: 15px;
-  font-family: 'Press Start 2P', monospace;
-  font-size: 12px;
-  letter-spacing: 0.5px;
-  transition: background-color 0.2s ease;
+  border-radius: 4px;
+  font-size: 14px;
+  transition: background-color 0.2s ease, transform 0.2s ease;
 }
 .cart-link-btn:hover {
-  background-color: #444;
+  background-color: #222;
+  transform: scale(1.02);
 }
 
 /* Секция фильтров */
 #filters {
-  background-color: #ffffff;
-  border: 1px solid #eaeaea;
+  background-color: #fff;
+  border: 1px solid #d0d0d0;
   border-radius: 4px;
   padding: 15px;
   margin: 20px auto;
   max-width: 1200px;
   display: flex;
-  justify-content: center;
+  flex-wrap: wrap;
   align-items: center;
   gap: 15px;
-  flex-wrap: wrap;
 }
 #filters label {
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   color: #666;
 }
 #filters input,
 #filters select {
   padding: 8px;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   border: 1px solid #ccc;
   border-radius: 4px;
-  min-width: 80px;
 }
 #filters button {
-  padding: 8px 16px;
-  font-size: 0.9rem;
-  border: none;
-  background-color: #333;
+  padding: 8px 20px;
+  font-size: 0.95rem;
+  background-color: #000;
   color: #fff;
+  border: none;
   border-radius: 4px;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: background-color 0.2s ease, transform 0.2s ease;
 }
 #filters button:hover {
-  background-color: #555;
+  background-color: #222;
+  transform: scale(1.02);
 }
 
 /* Основной контент */
@@ -138,60 +147,43 @@ header h1 {
   padding: 20px;
 }
 
-/* Контейнер результатов: каждый магазин представлен вертикальным блоком */
+/* Контейнер результатов */
 #results {
   display: flex;
   flex-direction: column;
-  gap: 40px; /* Отступ между блоками магазинов */
+  gap: 40px;
   margin-top: 20px;
 }
 
-.nav-btn {
-  display: inline-block;
-  background-color: #222;
-  color: #fff;
-  padding: 8px 16px;
-  margin: 0 5px;
-  text-decoration: none;
-  border-radius: 4px;
-  font-family: 'Press Start 2P', monospace;
-  font-size: 12px;
-  letter-spacing: 0.5px;
-  transition: background-color 0.2s ease;
-}
-.nav-btn:hover {
-  background-color: #444;
-}
-
-
-
-/* Блок для каждого магазина */
+/* Блок магазина */
 .store-block {
-  /* При необходимости здесь можно добавить дополнительные стили */
+  margin-bottom: 30px;
 }
 
-/* Сетка карточек товаров в магазине – ровно 5 карточек в одном ряду */
-.store-block .product-grid {
+/* Изменённый блок .product-grid */
+.product-grid {
   display: grid;
   grid-template-columns: repeat(5, 220px);
   gap: 20px;
+  position: relative; /* добавлено для абсолютного позиционирования кнопок */
 }
 
-/* Карточка товара */
+
+/* Карточка товара с эффектом подъёма при наведении */
 .product-card {
   width: 220px;
   background: #fff;
-  border: 1px solid #ddd;
+  border: 1px solid #ccc;
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-  transition: transform 0.2s ease;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+  transition: transform 0.3s ease;
   display: flex;
   flex-direction: column;
   flex-shrink: 0;
 }
 .product-card:hover {
-  transform: translateY(-5px);
+  transform: translateY(-8px);
 }
 .product-card img {
   display: block;
@@ -200,63 +192,43 @@ header h1 {
   height: 180px;
   object-fit: contain;
 }
-.product-card .card-content {
+.card-content {
   padding: 15px;
   flex-grow: 1;
   display: flex;
   flex-direction: column;
   justify-content: space-between;
 }
-.product-card h3 {
+.card-content h3 {
   font-size: 1rem;
   margin: 0 0 10px;
-  font-weight: 400;
+  font-weight: 500;
   color: #333;
   height: 4.5em;
   overflow: hidden;
 }
-.product-card p {
-  font-size: 0.9rem;
+.card-content p {
+  font-size: 0.95rem;
   color: #666;
   margin: 0 0 10px;
 }
-.product-card button {
+.card-content button {
   margin-top: auto;
   padding: 10px;
   border: none;
-  background-color: #333;
+  background-color: #000;
   color: #fff;
-  font-size: 0.9rem;
+  font-size: 0.95rem;
   border-radius: 4px;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: background-color 0.2s ease, transform 0.2s ease;
 }
-.product-card button:hover {
-  background-color: #555;
-}
-
-/* Блок навигации для магазина (если требуется пагинация) */
-.store-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 10px;
-}
-.store-nav button {
-  padding: 5px 10px;
-  border: none;
-  border-radius: 4px;
-  background: #333;
-  color: #fff;
-  cursor: pointer;
-  font-size: 0.9rem;
-}
-.store-nav button:disabled {
-  background: #ccc;
-  cursor: not-allowed;
+.card-content button:hover {
+  background-color: #222;
+  transform: scale(1.02);
 }
 
-/* Блок управления количеством товара (в карточке) */
+/* Блок управления количеством товара */
 .quick-quantity-controls {
   margin-top: 10px;
   display: flex;
@@ -264,37 +236,38 @@ header h1 {
   align-items: center;
   gap: 5px;
 }
-.quick-qty {
+.quick-quantity-controls .quick-qty {
   min-width: 20px;
   text-align: center;
   font-weight: bold;
 }
 .quick-btn {
   padding: 4px 8px;
-  background: #333;
+  background: #000;
   border: none;
   color: #fff;
   border-radius: 4px;
   cursor: pointer;
-  transition: background 0.2s ease;
+  transition: background-color 0.2s ease, transform 0.2s ease;
 }
 .quick-btn:hover {
-  background: #555;
+  background: #222;
+  transform: scale(1.02);
 }
 
-/* Глобальный спиннер по центру экрана */
+/* Глобальный спиннер с улучшенной анимацией и подсказкой */
 .global-spinner {
   display: flex;
+  flex-direction: column;
   justify-content: center;
   align-items: center;
   height: 60vh;
 }
-
-/* Новая Pixel Loader – минималистичная пиксельная загрузка */
 .pixel-loader {
   position: relative;
   width: 50px;
   height: 50px;
+  margin-bottom: 10px;
 }
 .pixel-loader div {
   position: absolute;
@@ -309,35 +282,18 @@ header h1 {
   display: block;
   width: 100%;
   height: 100%;
-  background-color: #333;
+  background-color: #000;
   animation: pixel-flicker 1.2s linear infinite;
-  /* Используем CSS-переменную для задержки */
   animation-delay: var(--delay);
 }
-.pixel-loader div:nth-child(1) {
-  transform: translate(-50%, -50%) rotate(0deg) translate(20px);
-}
-.pixel-loader div:nth-child(2) {
-  transform: translate(-50%, -50%) rotate(45deg) translate(20px);
-}
-.pixel-loader div:nth-child(3) {
-  transform: translate(-50%, -50%) rotate(90deg) translate(20px);
-}
-.pixel-loader div:nth-child(4) {
-  transform: translate(-50%, -50%) rotate(135deg) translate(20px);
-}
-.pixel-loader div:nth-child(5) {
-  transform: translate(-50%, -50%) rotate(180deg) translate(20px);
-}
-.pixel-loader div:nth-child(6) {
-  transform: translate(-50%, -50%) rotate(225deg) translate(20px);
-}
-.pixel-loader div:nth-child(7) {
-  transform: translate(-50%, -50%) rotate(270deg) translate(20px);
-}
-.pixel-loader div:nth-child(8) {
-  transform: translate(-50%, -50%) rotate(315deg) translate(20px);
-}
+.pixel-loader div:nth-child(1) { transform: translate(-50%, -50%) rotate(0deg) translate(20px); }
+.pixel-loader div:nth-child(2) { transform: translate(-50%, -50%) rotate(45deg) translate(20px); }
+.pixel-loader div:nth-child(3) { transform: translate(-50%, -50%) rotate(90deg) translate(20px); }
+.pixel-loader div:nth-child(4) { transform: translate(-50%, -50%) rotate(135deg) translate(20px); }
+.pixel-loader div:nth-child(5) { transform: translate(-50%, -50%) rotate(180deg) translate(20px); }
+.pixel-loader div:nth-child(6) { transform: translate(-50%, -50%) rotate(225deg) translate(20px); }
+.pixel-loader div:nth-child(7) { transform: translate(-50%, -50%) rotate(270deg) translate(20px); }
+.pixel-loader div:nth-child(8) { transform: translate(-50%, -50%) rotate(315deg) translate(20px); }
 .pixel-loader div:nth-child(1)::before { --delay: 0s; }
 .pixel-loader div:nth-child(2)::before { --delay: -0.15s; }
 .pixel-loader div:nth-child(3)::before { --delay: -0.30s; }
@@ -350,4 +306,72 @@ header h1 {
 @keyframes pixel-flicker {
   0%, 100% { opacity: 1; transform: scale(1); }
   50% { opacity: 0.3; transform: scale(0.5); }
+}
+
+/* Контейнер для навигационных кнопок (пагинация) */
+.store-nav {
+  display: flex;
+  justify-content: space-between;
+  margin-top: -30px; /* кнопки немного подняты */
+  padding: 0 10px;
+}
+.pagination-btn {
+  background-color: #000;
+  color: #fff;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+.pagination-btn:hover {
+  background-color: #222;
+  transform: scale(1.02);
+}
+.pagination-btn:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+/* Toast-уведомления – легкие и ненавязчивые */
+.toast-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 200;
+}
+.toast {
+  background-color: #000;
+  color: #fff;
+  padding: 10px 20px;
+  margin-top: 10px;
+  border-radius: 4px;
+  opacity: 0;
+  animation: fadeInOut 3s forwards;
+}
+@keyframes fadeInOut {
+  0% { opacity: 0; transform: translateY(30px); }
+  10%, 90% { opacity: 1; transform: translateY(0); }
+  100% { opacity: 0; transform: translateY(30px); }
+}
+
+/* Кнопка "Вверх" для плавного скроллинга */
+#scrollToTop {
+  position: fixed;
+  bottom: 40px;
+  right: 40px;
+  background-color: #000;
+  color: #fff;
+  padding: 12px 16px;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  visibility: hidden;
+  opacity: 0;
+  transition: opacity 0.3s, visibility 0.3s;
+  z-index: 150;
+}
+#scrollToTop.show {
+  visibility: visible;
+  opacity: 1;
 }

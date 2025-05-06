@@ -41,10 +41,12 @@ def parse_artplast(query: str):
             if link in seen:
                 continue
             seen.add(link)
+            
             name_elem = elem.find_next("a", class_=lambda c: c and "hover:text-violet" in c)
             name = name_elem.get_text(strip=True) if name_elem else "Без названия"
-            if query.lower() not in name.lower():
-                continue
+
+            # Дополнительная фильтрация по названию убрана
+            
             price_numeric = 0.0
             price_display = ""
             price_div = elem.find_next("div", class_=lambda c: c and "min-w-" in c)

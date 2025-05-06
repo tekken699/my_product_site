@@ -3,60 +3,121 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Профиль пользователя</title>
-    <!-- Подключаем общий стиль профиля -->
+    <title>Intrig - Профиль пользователя</title>
+    <!-- Подключаем Google Fonts для единого стиля (Merriweather) -->
+    <link href="https://fonts.googleapis.com/css2?family=Merriweather:wght@300;400;700&display=swap" rel="stylesheet">
+    <!-- Общий стиль сайта -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+    <!-- Дополнительный стиль для страницы профиля -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/profile.css') }}" />
+    <!-- Font Awesome для иконок -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" />
   </head>
   <body>
     <header>
-      <h1>Профиль пользователя</h1>
+      <h1>Intrig</h1>
       <nav>
-        <a href="{{ url_for('index') }}">На главную</a>
-        <a href="{{ url_for('logout') }}">Выход</a>
+        <a href="{{ url_for('index') }}" class="nav-btn">На главную</a>
+        <a href="{{ url_for('logout') }}" class="nav-btn">Выход</a>
       </nav>
     </header>
-    <main>
+    
+    <main id="profile-main">
+      <h2>Информация о пользователе</h2>
+      
       <!-- Форма для редактирования данных профиля -->
-      <form id="profile-form" method="POST" action="{{ url_for('profile) }}">
+      <form id="profile-form" method="POST" action="{{ url_for('profile') }}">
         <fieldset>
-          <legend>Основная информация</legend>
-          <label for="fio">ФИО:</label>
-          <input type="text" id="fio" name="fio" value="{{ user.fio }}" required />
-
-          <label for="phone">Телефон:</label>
-          <input type="tel" id="phone" name="phone" value="{{ user.phone }}" required />
-
-          <label for="address">Адрес:</label>
-          <input type="text" id="address" name="address" value="{{ user.address }}" required />
-
-          <label for="ip">ИП:</label>
-          <input type="text" id="ip" name="ip" value="{{ user.ip }}" />
-
-          <label for="inn">ИНН:</label>
-          <input type="text" id="inn" name="inn" value="{{ user.inn }}" />
+          <legend>Основные данные</legend>
+          
+          <!-- Графа ФИО -->
+          <div class="data-card editable-field" data-field="fio">
+            <label for="fio">ФИО:</label>
+            <div class="field-wrapper">
+              <span class="field-value">{{ user.fio }}</span>
+              <input type="text" id="fio" name="fio" value="{{ user.fio }}" class="edit-input" />
+              <button type="button" class="edit-btn" data-field="fio" title="Редактировать">
+                <i class="fa fa-pencil"></i>
+              </button>
+            </div>
+          </div>
+          
+          <!-- Графа Телефон -->
+          <div class="data-card editable-field" data-field="phone">
+            <label for="phone">Телефон:</label>
+            <div class="field-wrapper">
+              <span class="field-value">{{ user.phone }}</span>
+              <input type="text" id="phone" name="phone" value="{{ user.phone }}" class="edit-input" />
+              <button type="button" class="edit-btn" data-field="phone" title="Редактировать">
+                <i class="fa fa-pencil"></i>
+              </button>
+            </div>
+          </div>
+          
+          <!-- Графа Адрес -->
+          <div class="data-card editable-field" data-field="address">
+            <label for="address">Адрес:</label>
+            <div class="field-wrapper">
+              <span class="field-value">{{ user.address }}</span>
+              <input type="text" id="address" name="address" value="{{ user.address }}" class="edit-input" />
+              <button type="button" class="edit-btn" data-field="address" title="Редактировать">
+                <i class="fa fa-pencil"></i>
+              </button>
+            </div>
+          </div>
+          
+          <!-- Графа ИП -->
+          <div class="data-card editable-field" data-field="ip">
+            <label for="ip">ИП:</label>
+            <div class="field-wrapper">
+              <span class="field-value">{{ user.ip }}</span>
+              <input type="text" id="ip" name="ip" value="{{ user.ip }}" class="edit-input" />
+              <button type="button" class="edit-btn" data-field="ip" title="Редактировать">
+                <i class="fa fa-pencil"></i>
+              </button>
+            </div>
+          </div>
+          
+          <!-- Графа ИНН -->
+          <div class="data-card editable-field" data-field="inn">
+            <label for="inn">ИНН:</label>
+            <div class="field-wrapper">
+              <span class="field-value">{{ user.inn }}</span>
+              <input type="text" id="inn" name="inn" value="{{ user.inn }}" class="edit-input" />
+              <button type="button" class="edit-btn" data-field="inn" title="Редактировать">
+                <i class="fa fa-pencil"></i>
+              </button>
+            </div>
+          </div>
         </fieldset>
-        <button type="submit">Сохранить изменения</button>
+        <button type="submit" class="save-profile-btn">Сохранить изменения</button>
       </form>
 
-      <!-- Форма для смены пароля -->
-      <form id="password-form" method="POST" action="{{ url_for('change_password') }}">
-        <fieldset>
-          <legend>Смена пароля</legend>
-          <label for="current-password">Текущий пароль:</label>
-          <input type="password" id="current-password" name="current_password" required />
-
-          <label for="new-password">Новый пароль:</label>
-          <input type="password" id="new-password" name="new_password" required />
-
-          <label for="confirm-password">Подтвердите новый пароль:</label>
-          <input type="password" id="confirm-password" name="confirm_password" required />
-        </fieldset>
-        <button type="submit">Изменить пароль</button>
-      </form>
+      <!-- Секция для смены пароля -->
+      <div class="password-section">
+        <h3>Смена пароля</h3>
+        <form id="password-form" method="POST" action="{{ url_for('change_password') }}">
+          <div class="data-card">
+            <label for="current-password">Текущий пароль:</label>
+            <input type="password" id="current-password" name="current_password" required />
+          </div>
+          <div class="data-card">
+            <label for="new-password">Новый пароль:</label>
+            <input type="password" id="new-password" name="new_password" required />
+          </div>
+          <div class="data-card">
+            <label for="confirm-password">Подтвердите новый пароль:</label>
+            <input type="password" id="confirm-password" name="confirm_password" required />
+          </div>
+          <button type="submit" class="change-password-btn">Изменить пароль</button>
+        </form>
+      </div>
     </main>
+    
     <footer>
-      <p>&copy; 2025 MyApp</p>
+      <p>&copy; 2025 Intrig</p>
     </footer>
+    
     <script src="{{ url_for('static', filename='js/profile.js') }}"></script>
   </body>
 </html>

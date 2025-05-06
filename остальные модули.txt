@@ -1,0 +1,309 @@
+# driver_pool.py
+import queue
+import logging
+from driver_utils import get_driver
+
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+ 
+class DriverPool:
+    def __init__(self, pool_size=10):  # Увеличиваем размер пула до 10
+        self.pool = queue.Queue(maxsize=pool_size)
+        self.pool_size = pool_size
+        for _ in range(pool_size):
+            driver = get_driver(headless=True)
+            self.pool.put(driver)
+        logger.info("Инициализирован пул из %d драйверов", pool_size)
+
+    def acquire_driver(self, timeout=None):
+        try:
+            driver = self.pool.get(timeout=timeout)
+            logger.debug("Драйвер получен из пула")
+            return driver
+        except queue.Empty:
+            logger.error("Нет доступного драйвера в пуле!")
+            raise Exception("Driver pool depleted")
+
+    def release_driver(self, driver):
+        try:
+            driver.delete_all_cookies()
+        except Exception as e:
+            logger.error("Ошибка при удалении кук: %s", e)
+        self.pool.put(driver)
+        logger.debug("Драйвер возвращён в пул")
+
+    def close_all(self):
+        while not self.pool.empty():
+            driver = self.pool.get()
+            driver.quit()
+        logger.info("Все драйверы закрыты")
+
+# Глобальный объект пула
+driver_pool = DriverPool(pool_size=10)
+
+# driver_utils.py
+import logging
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+
+def get_driver(headless: bool = True):
+    options = Options()
+    if headless:
+        # Используем современный headless-режим
+        options.add_argument("--headless=new")
+    options.add_argument("--disable-gpu")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
+    # Отключаем загрузку изображений для повышения производительности
+    options.add_experimental_option("prefs", {"profile.managed_default_content_settings.images": 2})
+    # Подавляем лишние логи (например, ошибки USB)
+    options.add_experimental_option("excludeSwitches", ["enable-logging"])
+    
+    try:
+        driver = webdriver.Chrome(options=options)
+    except Exception as e:
+        logging.error("Не удалось инициализировать драйвер: %s", e)
+        raise
+    return driver
+
+from flask_sqlalchemy import SQLAlchemy
+from flask_login import UserMixin
+from werkzeug.security import generate_password_hash, check_password_hash
+from datetime import datetime
+
+db = SQLAlchemy()
+
+
+class Product(db.Model):
+    __tablename__ = 'products'
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(256), nullable=False)
+    # Новое поле search_query – по умолчанию пустая строка (можно задать default="", либо реализовать логику заполнения)
+    search_query = db.Column(db.String(255), default="")
+    price = db.Column(db.Float, nullable=False, default=0.0)
+    price_display = db.Column(db.String(64))
+    site = db.Column(db.String(64))
+    link = db.Column(db.String(256), unique=True, nullable=False)
+    img_url = db.Column(db.String(256))
+    quantity = db.Column(db.Integer, default=1)
+    step = db.Column(db.Integer, default=1)
+    availability = db.Column(db.String(128))
+    last_updated = db.Column(db.DateTime, default=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "name": self.name,
+            "search_query": self.search_query,
+            "price": self.price,
+            "price_display": self.price_display,
+            "site": self.site,
+            "link": self.link,
+            "img_url": self.img_url,
+            "quantity": self.quantity,
+            "step": self.step,
+            "availability": self.availability,
+            "last_updated": self.last_updated.isoformat() if self.last_updated else None
+        }
+
+        
+class User(UserMixin, db.Model):
+    __tablename__ = 'users'
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(64), unique=True, nullable=False)
+    email = db.Column(db.String(120), unique=True, nullable=False)
+    password_hash = db.Column(db.String(128))
+    fio = db.Column(db.String(128))
+    phone = db.Column(db.String(30))
+    address = db.Column(db.String(256))
+    ip = db.Column(db.String(64))
+    inn = db.Column(db.String(64))
+    
+    # Добавленное поле: если True – пользователь является администратором
+    is_admin = db.Column(db.Boolean, default=False)
+
+    def set_password(self, password):
+        self.password_hash = generate_password_hash(password)
+
+    def check_password(self, password):
+        return check_password_hash(self.password_hash, password)
+
+# page_loader.py
+import time
+import logging
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
+
+logger = logging.getLogger(__name__)
+
+def load_page(driver, url, css_selector, wait_time=15, sleep_after=0.3, attempts=3):
+    """
+    Загружает страницу по URL, ожидает появления элементов, удовлетворяющих css_selector.
+    Производится до attempts попыток при ошибке.
+    """
+    for attempt in range(1, attempts + 1):
+        try:
+            driver.get(url)
+            WebDriverWait(driver, wait_time).until(
+                EC.presence_of_all_elements_located((By.CSS_SELECTOR, css_selector))
+            )
+            time.sleep(sleep_after)
+            return driver.page_source
+        except Exception as e:
+            logger.error("Attempt %d/%d: Error loading %s: %s", attempt, attempts, url, e)
+            if attempt == attempts:
+                raise e
+            else:
+                time.sleep(1)
+
+from apscheduler.schedulers.background import BackgroundScheduler
+import atexit
+from datetime import datetime
+from models import db, Product
+from parsers import gudvin, promispb, hozka, artplast, newpackspb
+
+# Список подготовленных запросов
+PREDEFINED_QUERIES = [
+    "стакан",
+    "крышка",
+    "крышка для стакана",
+    "пакет",
+    "пакеты фасовочные",
+    "Контейнер",
+    "Крышка для контейнера",
+    "Коробка под пирожное",
+    "Пакет-майка",
+    "Лента",
+    "Наклейка",
+    "Средство",
+    "Химия",
+    "Средство для очистки молочных систем",
+    "Средство для кофемашины",
+    "Кольца кодировочные",
+    "Тарталетка",
+    "Уголок",
+    "Уголоки",
+    "Держатель для стаканов",
+    "Размешиватель",
+    "Трубочки",
+    "Вилка",
+    "Вилки",
+    "Ложка",
+    "Ложки",
+    "Нож",
+    "Ножи",
+    "Соусник",
+    "Бумага для выпечки",
+    "Пергамент",
+    "Мешок кондитерский",
+    "Бахилы",
+    "Одноразовые шапочки",
+    "Салфетки",
+    "Тряпка",
+    "Щетка",
+    "Губка",
+    "Мешок для мусора",
+    "Мешки для мусора",
+    "Пакет мусорный",
+    "Чековая лента",
+    "Этикет лента",
+    "Перчатки",
+    "Туалетная бумага",
+    "освежитель воздуха",
+    "Полотенце",
+    "Зубочистки",
+    "Тарелка",
+    "Антисептик",
+    "Сахар",
+    "Сахар порц",
+    "Соль",
+    "Соль порц",
+    "Перец",
+    "Перец порц"
+]
+
+def background_parser_job():
+    """
+    Фоновый парсер для предопределённых запросов:
+      - Для каждого запроса в PREDEFINED_QUERIES
+      - Для каждого магазина из словаря stores
+      - Вызывается соответствующий парсер, возвращающий список товаров
+      - Для каждого товара выполняется поиск по полю link:
+          • если товар уже есть – обновляются цена, доступность, время обновления
+          • если товара нет – создаётся новый объект Product
+      - После обработки всех товаров для запроса изменения фиксируются в БД
+    """
+    # Определяем словарь магазинов
+    stores = {
+        "gudvin": gudvin.parse_gudvin,
+        "promispb": promispb.parse_promispb,
+        "hozka": hozka.parse_hozka,
+        "artplast": artplast.parse_artplast,
+        "newpackspb": newpackspb.parse_newpackspb
+    }
+    
+    # Обход предопределённых запросов
+    for query in PREDEFINED_QUERIES:
+        for store_name, parser_func in stores.items():
+            try:
+                products_list = parser_func(query)
+                print(f"[{datetime.utcnow().isoformat()}] Обработал запрос '{query}' для магазина {store_name}, найдено товаров: {len(products_list)}")
+                
+                for prod in products_list:
+                    # Поиск записи в БД по уникальному полю link
+                    existing = Product.query.filter_by(link=prod["link"]).first()
+                    if existing:
+                        # Если изменились цена или доступность, обновляем запись
+                        if existing.price != prod["price"] or existing.availability != prod["availability"]:
+                            existing.price = prod["price"]
+                            existing.price_display = prod.get("price_display", str(prod["price"]))
+                            existing.availability = prod["availability"]
+                            existing.last_updated = datetime.utcnow()
+                            # Если хотите обновлять и другие поля (например, количество), можно добавить их здесь
+                            db.session.add(existing)
+                    else:
+                        # Создаем новую запись
+                        new_product = Product(
+                            name=prod["name"],
+                            search_query=prod["name"].lower(),  # Заполняем поле поиска на основании имени
+                            price=prod["price"],
+                            price_display=prod.get("price_display", str(prod["price"])),
+                            site=prod.get("site"),
+                            link=prod["link"],
+                            img_url=prod.get("img_url", ""),
+                            quantity=prod.get("quantity", 1),
+                            availability=prod["availability"],
+                            last_updated=datetime.utcnow()
+                        )
+                        db.session.add(new_product)
+                db.session.commit()
+            except Exception as e:
+                print(f"Ошибка парсера для запроса '{query}', магазин {store_name}: {e}")
+
+def start_scheduler(app):
+    """
+    Запускает планировщик, который каждые 3 часа выполняет background_parser_job.
+    """
+    scheduler = BackgroundScheduler()
+    scheduler.add_job(
+        func=lambda: (app.app_context().push(), background_parser_job()),
+        trigger='interval',
+        hours=3,
+        next_run_time=datetime.utcnow()
+    )
+    scheduler.start()
+    app.logger.info("APScheduler запущен")
+    atexit.register(lambda: scheduler.shutdown())
+
+# timer_utils.py
+from time import perf_counter
+from contextlib import contextmanager
+
+@contextmanager
+def timer(section_name: str):
+    start = perf_counter()
+    yield
+    end = perf_counter()
+    print(f"[TIMER] {section_name} took {end - start:.4f} seconds")

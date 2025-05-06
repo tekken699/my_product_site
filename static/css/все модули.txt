@@ -1,0 +1,743 @@
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+
+/* Общие базовые стили */
+* {
+  box-sizing: border-box;
+}
+html, body {
+  margin: 0;
+  padding: 0;
+  background-color: #f5f5f7;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  color: #333;
+}
+
+/* Header */
+header {
+  background-color: #ffffff;
+  border-bottom: 1px solid #eaeaea;
+  padding: 20px;
+  text-align: center;
+  position: relative;
+}
+header h1 {
+  font-family: 'Press Start 2P', cursive;
+  font-size: 28px;
+  font-weight: normal;
+  color: #333;
+  margin: 0 0 10px;
+  text-align: left;      /* Переопределяем выравнивание для h1 */
+  margin-left: 500px;     /* Смещаем его чуть левее */
+}
+
+
+/* Блок ссылок аутентификации */
+.user-links {
+  position: absolute;
+  right: 20px;
+  top: 20px;
+  font-size: 0.9rem;
+}
+/* Единый стиль для навигационных кнопок (как ссылки, так и кнопки) */
+.nav-btn,
+button.nav-btn {
+  display: inline-block;
+  background-color: #222;
+  color: #fff;
+  padding: 8px 16px;
+  margin-left: 10px;
+  text-decoration: none;
+  border: none;
+  border-radius: 4px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  transition: background-color 0.2s ease;
+  cursor: pointer;
+}
+.nav-btn:hover,
+button.nav-btn:hover {
+  background-color: #444;
+}
+
+/* Поисковая форма */
+#search-form {
+  margin-top: 15px;
+  display: inline-flex;
+}
+#search-form input[type="text"] {
+  padding: 10px;
+  width: 300px;
+  border: 1px solid #ccc;
+  border-right: none;
+  border-radius: 4px 0 0 4px;
+  font-size: 1rem;
+  outline: none;
+}
+#search-form button {
+  display: inline-block;
+  background-color: #222;
+  color: #fff;
+  padding: 8px 16px;
+  margin: 0 5px;
+  text-decoration: none;
+  border-radius: 20px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  transition: background-color 0.2s ease;
+  border: none;
+  cursor: pointer;
+}
+#search-form button:hover {
+  background-color: #444;
+}
+
+/* Корзина */
+.cart-link-btn {
+  display: inline-block;
+  background-color: #222;
+  color: #fff;
+  padding: 8px 16px;
+  margin: 0 5px;
+  text-decoration: none;
+  border-radius: 15px;
+  font-family: 'Press Start 2P', monospace;
+  font-size: 12px;
+  letter-spacing: 0.5px;
+  transition: background-color 0.2s ease;
+}
+.cart-link-btn:hover {
+  background-color: #444;
+}
+
+/* Секция фильтров */
+#filters {
+  background-color: #ffffff;
+  border: 1px solid #eaeaea;
+  border-radius: 4px;
+  padding: 15px;
+  margin: 20px auto;
+  max-width: 1200px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+#filters label {
+  font-size: 0.9rem;
+  color: #666;
+}
+#filters input,
+#filters select {
+  padding: 8px;
+  font-size: 0.9rem;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  min-width: 80px;
+}
+#filters button {
+  padding: 8px 16px;
+  font-size: 0.9rem;
+  border: none;
+  background-color: #333;
+  color: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+#filters button:hover {
+  background-color: #555;
+}
+
+/* Основной контент */
+#main-content {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+/* Контейнер результатов */
+#results {
+  display: flex;
+  flex-direction: column;
+  gap: 40px;
+  margin-top: 20px;
+}
+
+/* Блок для каждого магазина */
+.store-block {
+  /* Дополнительные стили при необходимости */
+}
+
+/* Сетка карточек товаров */
+.store-block .product-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 220px);
+  gap: 20px;
+}
+
+/* Карточка товара */
+.product-card {
+  width: 220px;
+  background: #fff;
+  border: 1px solid #ddd;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+.product-card:hover {
+  transform: translateY(-5px);
+}
+.product-card img {
+  display: block;
+  margin: 0 auto;
+  width: 70%;
+  height: 180px;
+  object-fit: contain;
+}
+.product-card .card-content {
+  padding: 15px;
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.product-card h3 {
+  font-size: 1rem;
+  margin: 0 0 10px;
+  font-weight: 400;
+  color: #333;
+  height: 4.5em;
+  overflow: hidden;
+}
+.product-card p {
+  font-size: 0.9rem;
+  color: #666;
+  margin: 0 0 10px;
+}
+.product-card button {
+  margin-top: auto;
+  padding: 10px;
+  border: none;
+  background-color: #333;
+  color: #fff;
+  font-size: 0.9rem;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+.product-card button:hover {
+  background-color: #555;
+}
+
+/* Навигация для магазина */
+.store-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 10px;
+}
+.store-nav button {
+  padding: 5px 10px;
+  border: none;
+  border-radius: 4px;
+  background: #333;
+  color: #fff;
+  cursor: pointer;
+  font-size: 0.9rem;
+}
+.store-nav button:disabled {
+  background: #ccc;
+  cursor: not-allowed;
+}
+
+/* Блок управления количеством товара */
+.quick-quantity-controls {
+  margin-top: 10px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 5px;
+}
+.quick-qty {
+  min-width: 20px;
+  text-align: center;
+  font-weight: bold;
+}
+.quick-btn {
+  padding: 4px 8px;
+  background: #333;
+  border: none;
+  color: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+.quick-btn:hover {
+  background: #555;
+}
+
+/* Глобальный спиннер */
+.global-spinner {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 60vh;
+}
+
+/* Pixel Loader */
+.pixel-loader {
+  position: relative;
+  width: 50px;
+  height: 50px;
+}
+.pixel-loader div {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  left: 50%;
+  top: 50%;
+  transform-origin: center;
+}
+.pixel-loader div::before {
+  content: "";
+  display: block;
+  width: 100%;
+  height: 100%;
+  background-color: #333;
+  animation: pixel-flicker 1.2s linear infinite;
+  animation-delay: var(--delay);
+}
+.pixel-loader div:nth-child(1) {
+  transform: translate(-50%, -50%) rotate(0deg) translate(20px);
+}
+.pixel-loader div:nth-child(2) {
+  transform: translate(-50%, -50%) rotate(45deg) translate(20px);
+}
+.pixel-loader div:nth-child(3) {
+  transform: translate(-50%, -50%) rotate(90deg) translate(20px);
+}
+.pixel-loader div:nth-child(4) {
+  transform: translate(-50%, -50%) rotate(135deg) translate(20px);
+}
+.pixel-loader div:nth-child(5) {
+  transform: translate(-50%, -50%) rotate(180deg) translate(20px);
+}
+.pixel-loader div:nth-child(6) {
+  transform: translate(-50%, -50%) rotate(225deg) translate(20px);
+}
+.pixel-loader div:nth-child(7) {
+  transform: translate(-50%, -50%) rotate(270deg) translate(20px);
+}
+.pixel-loader div:nth-child(8) {
+  transform: translate(-50%, -50%) rotate(315deg) translate(20px);
+}
+.pixel-loader div:nth-child(1)::before { --delay: 0s; }
+.pixel-loader div:nth-child(2)::before { --delay: -0.15s; }
+.pixel-loader div:nth-child(3)::before { --delay: -0.30s; }
+.pixel-loader div:nth-child(4)::before { --delay: -0.45s; }
+.pixel-loader div:nth-child(5)::before { --delay: -0.60s; }
+.pixel-loader div:nth-child(6)::before { --delay: -0.75s; }
+.pixel-loader div:nth-child(7)::before { --delay: -0.90s; }
+.pixel-loader div:nth-child(8)::before { --delay: -1.05s; }
+
+@keyframes pixel-flicker {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.3; transform: scale(0.5); }
+}
+
+
+// Глобальные переменные для хранения результатов поиска и текущего номера страницы для каждого магазина
+let globalData = null;
+let storePages = {}; // Например: { "gudvin": 0, "promispb": 0, ... }
+let updateIntervalId = null;
+
+// Функция выполнения поиска: отправляем AJAX-запрос на /api/search
+async function performSearch() {
+  const query = document.getElementById("search-input").value.trim();
+  if (!query) {
+    alert("Введите поисковый запрос");
+    return;
+  }
+  
+  // Считываем фильтры: минимальная цена, максимальная и опция сортировки
+  const minPrice = parseFloat(document.getElementById("min-price").value) || 0;
+  const maxPrice = parseFloat(document.getElementById("max-price").value) || Infinity;
+  const sortOption = document.getElementById("sort").value;
+  
+  // Фильтр "В наличии" – проверяем состояние чекбокса
+  const availableOnly = document.getElementById("available-only").checked;
+  
+  // Отображаем глобальный спиннер по центру экрана с использованием нового Pixel Loader
+  document.getElementById("results").innerHTML = `
+    <div class="global-spinner">
+      <div class="pixel-loader">
+        <div></div>
+        <div></div>
+        <div></div>
+        <div></div>
+        <div></div>
+        <div></div>
+        <div></div>
+        <div></div>
+      </div>
+    </div>`;
+  
+  try {
+    const response = await fetch("/api/search", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: query, availableOnly: availableOnly })
+    });
+    const data = await response.json();
+    
+    // Сохраняем глобальные данные и сбрасываем страницы
+    globalData = data;
+    storePages = {};
+    displayStoreProducts(minPrice, maxPrice, sortOption);
+    
+    // Запускаем опрос обновлений каждые 3 секунды
+    if (updateIntervalId) clearInterval(updateIntervalId);
+    updateIntervalId = setInterval(() => pollForUpdates(query, minPrice, maxPrice, sortOption), 3000);
+    
+    // Прокручиваем страницу к контейнеру результатов
+    document.getElementById("results").scrollIntoView({ behavior: "smooth" });
+  } catch (error) {
+    console.error("Ошибка запроса:", error);
+    document.getElementById("results").innerHTML = "<p>Ошибка загрузки товаров</p>";
+  }
+}
+
+document.getElementById("update-products-btn").addEventListener("click", async (e) => {
+  e.preventDefault();
+  try {
+    // Отправляем POST-запрос для запуска обновления товаров
+    const response = await fetch("/admin/update_products", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" }
+    });
+    const data = await response.json();
+    // Выводим сообщение об успешном запуске обновления
+    alert(data.message);
+  } catch (error) {
+    console.error("Ошибка при обновлении товаров:", error);
+    alert("Ошибка обновления товаров");
+  }
+});
+
+
+// Функция опроса обновления результатов
+async function pollForUpdates(query, minPrice, maxPrice, sortOption) {
+  try {
+    const response = await fetch("/api/search/update", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query: query })
+    });
+    const updatedData = await response.json();
+    let updated = false;
+    for (let store in updatedData) {
+      if (!globalData[store] || 
+          !globalData[store].products || 
+          globalData[store].products.length < updatedData[store].products.length) {
+        globalData[store] = updatedData[store];
+        updated = true;
+      }
+    }
+    if (updated) {
+      displayStoreProducts(minPrice, maxPrice, sortOption);
+      let allReady = true;
+      for (let store in globalData) {
+        if (!globalData[store].products || globalData[store].products.length === 0)
+          allReady = false;
+      }
+      if (allReady) clearInterval(updateIntervalId);
+    }
+  } catch (error) {
+    console.error("Ошибка обновления:", error);
+  }
+}
+
+// Функция отображения результатов по магазинам (5 карточек на страницу)
+function displayStoreProducts(minPrice, maxPrice, sortOption) {
+  const resultsContainer = document.getElementById("results");
+  resultsContainer.innerHTML = "";
+  let storesFound = false;
+  const itemsPerPage = 5;
+  
+  for (let store in globalData) {
+    if (!globalData[store] || !globalData[store].products) continue;
+    
+    // Фильтрация товаров по цене
+    let products = globalData[store].products.filter(item => item.price >= minPrice && item.price <= maxPrice);
+    
+    if (sortOption === "priceAsc") {
+      products.sort((a, b) => a.price - b.price);
+    } else if (sortOption === "priceDesc") {
+      products.sort((a, b) => b.price - a.price);
+    }
+    
+    const storeBlock = document.createElement("div");
+    storeBlock.classList.add("store-block");
+    
+    const storeHeading = document.createElement("h2");
+    storeHeading.classList.add("store-heading");
+    storeHeading.textContent = `${getStoreName(store)} (${globalData[store].count} товаров)`;
+    storeBlock.appendChild(storeHeading);
+    
+    const productGrid = document.createElement("div");
+    productGrid.classList.add("product-grid");
+    
+    if (products.length === 0) {
+      const spinner = document.createElement("div");
+      spinner.innerHTML = `
+        <div class="global-spinner">
+          <div class="pixel-loader">
+            <div></div>
+            <div></div>
+            <div></div>
+            <div></div>
+            <div></div>
+            <div></div>
+            <div></div>
+            <div></div>
+          </div>
+        </div>`;
+      productGrid.appendChild(spinner);
+    } else {
+      let currentPage = storePages.hasOwnProperty(store) ? storePages[store] : 0;
+      const startIndex = currentPage * itemsPerPage;
+      const endIndex = startIndex + itemsPerPage;
+      const pageProducts = products.slice(startIndex, endIndex);
+      
+      pageProducts.forEach(product => {
+        if (!product.name || !product.link) return;
+        product.store = store;
+        const card = createProductCard(product);
+        productGrid.appendChild(card);
+      });
+    }
+    storeBlock.appendChild(productGrid);
+    
+    const navContainer = document.createElement("div");
+    navContainer.classList.add("store-nav");
+    
+    const nextButton = document.createElement("button");
+    nextButton.textContent = "Вперед";
+    nextButton.disabled = products.length <= ((storePages[store] || 0) + 1) * itemsPerPage;
+    nextButton.addEventListener("click", () => {
+      storePages[store] = (storePages[store] || 0) + 1;
+      displayStoreProducts(minPrice, maxPrice, sortOption);
+    });
+    
+    const prevButton = document.createElement("button");
+    prevButton.textContent = "Назад";
+    prevButton.disabled = (storePages[store] || 0) === 0;
+    prevButton.addEventListener("click", () => {
+      storePages[store] = (storePages[store] || 0) - 1;
+      displayStoreProducts(minPrice, maxPrice, sortOption);
+    });
+    
+    navContainer.appendChild(nextButton);
+    navContainer.appendChild(prevButton);
+    storeBlock.appendChild(navContainer);
+    
+    resultsContainer.appendChild(storeBlock);
+    storesFound = true;
+  }
+  
+  if (!storesFound) {
+    resultsContainer.innerHTML = "<p>Товары не найдены.</p>";
+  }
+}
+
+// Функция создания карточки товара
+function createProductCard(product) {
+  const card = document.createElement("div");
+  card.classList.add("product-card");
+  
+  const img = document.createElement("img");
+  img.src = product.img_url || "placeholder.png";
+  img.alt = product.name;
+  img.loading = "lazy";
+  img.addEventListener("dblclick", () => window.open(product.link, "_blank"));
+  card.appendChild(img);
+  
+  const content = document.createElement("div");
+  content.classList.add("card-content");
+  
+  const title = document.createElement("h3");
+  title.textContent = product.name;
+  title.addEventListener("dblclick", () => window.open(product.link, "_blank"));
+  content.appendChild(title);
+  
+  const price = document.createElement("p");
+  price.textContent = product.price_display || `${product.price.toFixed(2)} руб.`;
+  content.appendChild(price);
+  
+  if (product.availability) {
+    const avail = document.createElement("p");
+    avail.textContent = product.availability;
+    let status = product.availability.trim().toLowerCase();
+    if (status.includes("в наличии") && !status.startsWith("нет") && !status.includes("под заказ")) {
+      avail.classList.add("status-available");
+    } else if (status.includes("под заказ")) {
+      avail.classList.add("status-order");
+    } else if (status.startsWith("нет")) {
+      avail.classList.add("status-unavailable");
+    }
+    content.appendChild(avail);
+  }
+  
+  const addBtn = document.createElement("button");
+  addBtn.textContent = "Добавить в корзину";
+  if (product.availability) {
+    let status = product.availability.trim().toLowerCase();
+    if (status.includes("под заказ") || status.startsWith("нет")) {
+      addBtn.disabled = true;
+      addBtn.textContent = status.includes("под заказ") ? "Под заказ" : "Нет в наличии";
+      addBtn.style.backgroundColor = "#ccc";
+      addBtn.style.cursor = "not-allowed";
+    }
+  }
+  addBtn.addEventListener("click", function () {
+    if (!this.disabled) {
+      let originalText = this.textContent;
+      this.textContent = "✓";
+      setTimeout(() => {
+        this.textContent = originalText;
+      }, 1500);
+      window.addToCart(product);
+      const quickBlock = card.querySelector(".quick-quantity-controls");
+      if (quickBlock) quickBlock.style.display = "flex";
+    }
+  });
+  content.appendChild(addBtn);
+  
+  const quickControls = document.createElement("div");
+  quickControls.className = "quick-quantity-controls";
+  quickControls.style.display = "none";
+  
+  const qtyDisplay = document.createElement("span");
+  qtyDisplay.textContent = product.quantity || 1;
+  qtyDisplay.className = "quick-qty";
+  
+  const minusBtn = document.createElement("button");
+  minusBtn.textContent = "–";
+  minusBtn.className = "quick-btn";
+  minusBtn.addEventListener("click", () => {
+    const step = product.step || 1;
+    const newQty = Math.max(step, (product.quantity || 1) - step);
+    product.quantity = newQty;
+    window.updateCartItem && window.updateCartItem(product.link, newQty);
+    qtyDisplay.textContent = newQty;
+  });
+  quickControls.appendChild(minusBtn);
+  
+  quickControls.appendChild(qtyDisplay);
+  
+  const plusBtn = document.createElement("button");
+  plusBtn.textContent = "+";
+  plusBtn.className = "quick-btn";
+  plusBtn.addEventListener("click", () => {
+    const step = product.step || 1;
+    const newQty = (product.quantity || 1) + step;
+    product.quantity = newQty;
+    window.updateCartItem && window.updateCartItem(product.link, newQty);
+    qtyDisplay.textContent = newQty;
+  });
+  quickControls.appendChild(plusBtn);
+  
+  content.appendChild(quickControls);
+  card.appendChild(content);
+  
+  return card;
+}
+
+// Функция преобразования ключа магазина в читаемое имя
+function getStoreName(storeKey) {
+  const mapping = {
+    "gudvin": "Gudvin Group",
+    "promispb": "Promispb",
+    "hozka": "Hozka.pro",
+    "artplast": "ArtPlast",
+    "newpackspb": "NewPacksPB",
+    "promindus": "Promindus"
+  };
+  return mapping[storeKey.toLowerCase()] || (storeKey.charAt(0).toUpperCase() + storeKey.slice(1));
+}
+
+// Обработчики событий
+document.getElementById("search-form").addEventListener("submit", e => {
+  e.preventDefault();
+  performSearch();
+});
+document.getElementById("apply-filters").addEventListener("click", () => performSearch());
+document.getElementById("checkout-btn").addEventListener("click", e => {
+  e.preventDefault();
+  checkoutCart();
+});
+
+
+<!DOCTYPE html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Intrick</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}" />
+  </head>
+  <body>
+    <header>
+      <h1>Intrick</h1>
+      <div class="user-links">
+        {% if current_user.is_authenticated %}
+          <span class="nav-btn">Привет, {{ current_user.username }}</span>
+          {% if current_user.is_admin %}
+            <button id="update-products-btn" class="nav-btn">Обновить товары</button>
+          {% endif %}
+          <a href="{{ url_for('profile') }}" class="nav-btn">Профиль</a>
+          <a href="{{ url_for('logout') }}" class="nav-btn">Выйти</a>
+        {% else %}
+          <a href="{{ url_for('login') }}" class="nav-btn">Войти</a>
+          <a href="{{ url_for('register') }}" class="nav-btn">Регистрация</a>
+        {% endif %}
+      </div>
+      
+      <form id="search-form">
+        <input type="text" id="search-input" placeholder="Введите поисковый запрос" />
+        <button type="submit">Найти</button>
+      </form>
+      <a href="{{ url_for('cart') }}" class="cart-link-btn">Корзина</a>
+    </header>
+    
+    <section id="filters">
+      <label for="min-price">Цена от:</label>
+      <input type="number" id="min-price" placeholder="0" />
+      <label for="max-price">до:</label>
+      <input type="number" id="max-price" placeholder="∞" />
+      <label for="sort">Сортировать:</label>
+      <select id="sort">
+        <option value="default">По умолчанию</option>
+        <option value="priceAsc">Цена: по возрастанию</option>
+        <option value="priceDesc">Цена: по убыванию</option>
+      </select>
+      <label for="available-only">В наличии:</label>
+      <input type="checkbox" id="available-only" />
+      <button id="apply-filters">Применить</button>
+    </section>
+    
+    <div id="main-content">
+      <section id="results"></section>
+    </div>
+    
+    <script src="{{ url_for('static', filename='js/cart.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/main.js') }}"></script>
+  </body>
+</html>
